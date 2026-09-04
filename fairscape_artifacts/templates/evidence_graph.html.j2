@@ -1,0 +1,15 @@
+{% extends "base.html.j2" %}
+
+{% block head %}
+<style>{{ reactflow_css }}</style>
+{%- endblock %}
+
+{% block main %}
+<p class="page-note">Outputs on the left, inputs on the right &mdash; click a node for its details.</p>
+<div id="evidence-graph"></div>
+{%- endblock %}
+
+{% block scripts %}
+<script>window.__EVIDENCE_GRAPH__ = {{ graph_json }};</script>
+<script>{{ viewer_js }}</script>
+{%- endblock %}

@@ -1,0 +1,38 @@
+{
+  "AIReadyPaperExample": {
+    "inputs": 0,
+    "inputsDigest": "da39a3ee5e6b",
+    "outputs": 0,
+    "outputsDigest": "da39a3ee5e6b"
+  },
+  "CM4AIJuneRelease": {
+    "inputs": 0,
+    "inputsDigest": "da39a3ee5e6b",
+    "outputs": 0,
+    "outputsDigest": "da39a3ee5e6b"
+  },
+  "wizards/bigidea": {
+    "inputs": 6,
+    "inputsDigest": "002b306b577f",
+    "outputs": 131,
+    "outputsDigest": "2cc2150271d6"
+  },
+  "wizards/example-wf": {
+    "inputs": 3,
+    "inputsDigest": "bfc04fff6da8",
+    "outputs": 3,
+    "outputsDigest": "bfc04fff6da8"
+  },
+  "wizards/single-cell-breast-cancer": {
+    "inputs": 3,
+    "inputsDigest": "6f552fdddddf",
+    "outputs": 21,
+    "outputsDigest": "d544c721eb29"
+  },
+  "wizards/thingslee": {
+    "inputs": 397,
+    "inputsDigest": "34eafd02a739",
+    "outputs": 1062,
+    "outputsDigest": "5a6e8b9fd5da"
+  }
+}

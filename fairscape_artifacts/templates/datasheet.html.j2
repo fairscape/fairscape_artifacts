@@ -1,0 +1,502 @@
+{% extends "base.html.j2" %}
+
+{#- One label/value row of a key-value block. -#}
+{% macro kv(row) -%}
+<div{% if row.id %} id="{{ row.id }}"{% endif %}>
+  <div class="label">{{ row.label }}</div>
+  <div class="value{% if row.kind == 'mono' %} mono{% endif %}">
+    {%- if row.kind == 'missing' %}<span class="missing">{{ row.value }}</span>
+    {%- elif row.kind == 'list' %}<ul class="plain">{% for item in row.entries %}<li>{% if item.href %}<a href="{{ item.href }}" target="_blank" rel="noopener">{{ item.text }}</a>{% else %}{{ item.text }}{% endif %}</li>{% endfor %}</ul>
+    {%- elif row.href %}<a href="{{ row.href }}"{% if row.href.startswith('http') %} target="_blank" rel="noopener"{% endif %}>{{ row.value }}</a>
+    {%- else %}{{ row.value }}{% endif %}
+  </div>
+</div>
+{%- endmacro %}
+
+{#- A simple label/value pair inside a card, shown only when populated. -#}
+{% macro pair(label, value, href='', mono=false) -%}
+{%- if value %}
+<div>
+  <div class="label">{{ label }}</div>
+  <div class="value{% if mono %} mono{% endif %}">{% if href %}<a href="{{ href }}"{% if href.startswith('http') %} target="_blank" rel="noopener"{% endif %}>{{ value }}</a>{% else %}{{ value }}{% endif %}</div>
+</div>
+{%- endif %}
+{%- endmacro %}
+
+{#- "a + b -> c" for a computation or experiment pattern. -#}
+{% macro pattern(p) -%}
+<span class="pattern">{% for i in p.inputs %}{% if not loop.first %} + {% endif %}{% if i.crate %}<b>{{ i.crate }}</b>: {% endif %}{{ i.formats|join(' + ') }}{% endfor %} <span class="arrow">&rarr;</span> {{ p.outputs|join(' + ') }}{% if p.n > 1 %} <span class="muted">&times;{{ p.n }}</span>{% endif %}</span>
+{%- endmacro %}
+
+{% macro tally(rows) -%}
+{% for t in rows %}{{ t.label }} <span class="muted">({{ t.n }})</span>{% if not loop.last %}, {% endif %}{% endfor %}
+{%- endmacro %}
+
+{% block nav %}
+<button id="sidebar-toggle" aria-label="Toggle navigation" aria-controls="sidebar">&#9776;</button>
+<button id="back-to-top" title="Back to top" aria-label="Back to top">&uarr;</button>
+<nav id="sidebar" aria-label="Datasheet sections">
+  <div class="sidebar-title">Contents</div>
+  {%- for entry in nav %}
+  {%- if entry.children %}
+  <details class="sidebar-group" open>
+    <summary><a href="{{ entry.href }}">{{ entry.label }}</a></summary>
+    {%- for child in entry.children %}
+    <a class="sub" href="{{ child.href }}" title="{{ child.label }}">{{ child.label }}</a>
+    {%- endfor %}
+  </details>
+  {%- else %}
+  <a href="{{ entry.href }}">{{ entry.label }}</a>
+  {%- endif %}
+  {%- endfor %}
+  {%- if links.evidence_graph or links.review_html %}
+  <div class="sidebar-title">Companion pages</div>
+  {%- if links.evidence_graph %}
+  <a class="ext" href="{{ links.evidence_graph }}">Evidence graph &#8599;</a>
+  {%- endif %}
+  {%- if links.review_html %}
+  <a class="ext" href="{{ links.review_html }}">AI-Ready review page &#8599;</a>
+  {%- endif %}
+  {%- endif %}
+</nav>
+{% endblock %}
+
+{% block main %}
+{#- ---------------------------------------------------------------- summary #}
+<section id="datasheet-summary">
+  <h2>Datasheet Summary</h2>
+  {%- if summary.description %}
+  <p class="lead">{{ summary.description }}{% if summary.truncated %}&hellip; <a class="more-link" href="#description">read full description</a>{% endif %}</p>
+  {%- endif %}
+  <div class="summary-grid{% if not review %} single{% endif %}">
+    <div class="panel">
+      <div class="panel-label">Dataset statistics</div>
+      <div class="stat-grid">
+        {%- for stat in summary.stats %}
+        <div class="stat"><span class="n">{{ stat.n }}</span><span class="label">{{ stat.label }}</span></div>
+        {%- endfor %}
+      </div>
+      {%- if summary.extra %}
+      <p class="extra"><span class="stat-sub">Also</span> {% for e in summary.extra %}{{ e.n }} {{ e.label }}{% if not loop.last %} &middot; {% endif %}{% endfor %}</p>
+      {%- endif %}
+      {%- if summary.formats %}
+      <p class="formats"><span class="stat-sub">Formats</span> {% for fmt in summary.formats %}<span class="tag">{{ fmt }}</span> {% endfor %}{% if summary.formats_more %}<span class="tag muted">+{{ summary.formats_more }} more</span>{% endif %}</p>
+      {%- endif %}
+      {%- if summary.access_href or links.evidence_graph %}
+      <p class="actions">
+        {%- if summary.access_href %}
+        <a class="btn" href="{{ summary.access_href }}" target="_blank" rel="noopener">Access data</a>
+        {%- endif %}
+        {%- if links.evidence_graph %}
+        <a class="btn ghost" href="{{ links.evidence_graph }}">Evidence graph</a>
+        {%- endif %}
+      </p>
+      {%- endif %}
+    </div>
+    {%- if review %}
+    <div class="panel">
+      <div class="panel-label">AI-Readiness review
+        <span class="panel-links"><a href="#ai-ready-review">details &darr;</a>{% if links.review_html %} &middot; <a href="{{ links.review_html }}">review page &#8599;</a>{% endif %}</span>
+      </div>
+      <div class="review-flex">
+        <div class="donut-wrap">
+          <svg class="donut" viewBox="0 0 120 120" role="img" aria-label="{{ review.estimated }} of {{ review.criteria_total }} criteria carry a mechanical estimate">
+            <circle class="donut-track" cx="60" cy="60" r="54"></circle>
+            {%- for seg in review.donut %}
+            <circle class="seg {{ seg.cls }}" cx="60" cy="60" r="54" stroke-dasharray="{{ seg.length }} {{ review.circumference }}" stroke-dashoffset="{{ seg.offset }}"><title>{{ seg.label }}: {{ seg.n }}</title></circle>
+            {%- endfor %}
+            <text class="donut-text" x="60" y="58">{{ review.estimated }}/{{ review.criteria_total }}</text>
+            <text class="donut-sub" x="60" y="74">estimated</text>
+          </svg>
+        </div>
+        <div class="rbars">
+          {%- for section in review.sections %}
+          <div class="rbar-row">
+            <div class="rbar-label" title="{{ section.title }}">{{ section.title }}</div>
+            <div class="rbar">{% for seg in section.segments %}<i class="{{ seg.cls }}" style="width: {{ seg.pct }}%" title="{{ seg.label }}: {{ seg.n }}"></i>{% endfor %}</div>
+            <div class="rbar-n" title="{{ section.points }} of {{ section.possible }} points over {{ section.estimated }} estimated criteria{% if section.tally['Human review'] %}; {{ section.tally['Human review'] }} await human review{% endif %}">{{ section.points }}/{{ section.possible }}</div>
+          </div>
+          {%- endfor %}
+        </div>
+      </div>
+      <p class="legend">{% for item in review.legend %}<span class="{{ item.cls }}">{{ item.label }}</span>{% endfor %}</p>
+      <p class="page-note small">{{ review.points }} of {{ review.possible }} points over the {{ review.estimated }} criteria with a mechanical estimate; {{ review.tally['Human review'] }} await human review and are not counted either way.</p>
+    </div>
+    {%- endif %}
+  </div>
+</section>
+
+{#- --------------------------------------------------------------- overview #}
+<section id="dataset-details">
+  <h2>Release Overview</h2>
+  <div class="kv">
+    {%- for row in overview %}
+    {{ kv(row) }}
+    {%- endfor %}
+  </div>
+  <div class="reg">
+    <h3>Human Subjects &amp; Regulatory</h3>
+    <div class="reg-grid">
+      <div><span class="rlabel">Human subjects research</span>{% if regulatory.human_subject_research %}{{ regulatory.human_subject_research }}{% else %}<span class="missing">{{ regulatory.not_specified }}</span>{% endif %}</div>
+      <div><span class="rlabel">De-identified samples</span>{% if regulatory.deidentified %}{{ regulatory.deidentified }}{% else %}<span class="missing">{{ regulatory.not_specified }}</span>{% endif %}</div>
+      <div><span class="rlabel">FDA regulated</span>{% if regulatory.fda_regulated %}{{ regulatory.fda_regulated }}{% else %}<span class="missing">{{ regulatory.not_specified }}</span>{% endif %}</div>
+      <div><span class="rlabel">IRB protocol ID</span>{% if regulatory.irb_protocol_id %}{{ regulatory.irb_protocol_id }}{% else %}<span class="missing">{{ regulatory.not_specified }}</span>{% endif %}</div>
+      <div><span class="rlabel">Institutional review board</span>
+        {%- if regulatory.irb is mapping %}
+        {%- set irb = regulatory.irb %}
+        {%- set contact = irb.get('contactPoint') if irb.get('contactPoint') is mapping else {} %}
+        {%- set address = irb.get('address') if irb.get('address') is mapping else {} %}
+        <span class="irb-name">{{ irb.get('name') or irb.get('@id') or 'Named' }}</span>
+        {%- if contact %}
+        <span class="irb-contact">{% if contact.get('contactType') %}{{ contact.get('contactType') }} &middot; {% endif %}{% if contact.get('email') %}<a href="mailto:{{ contact.get('email') }}">{{ contact.get('email') }}</a>{% endif %}{% if contact.get('telephone') %} &middot; {{ contact.get('telephone') }}{% endif %}</span>
+        {%- endif %}
+        {%- if address %}
+        <span class="irb-address">{{ [address.get('streetAddress'), address.get('addressLocality'), address.get('addressRegion'), address.get('postalCode'), address.get('addressCountry')]|select|join(', ') }}</span>
+        {%- endif %}
+        {%- elif regulatory.irb %}{{ regulatory.irb }}
+        {%- else %}<span class="missing">{{ regulatory.not_specified }}</span>{% endif %}
+      </div>
+      <div><span class="rlabel">Human subjects exemptions</span>{% if regulatory.exemptions %}{{ regulatory.exemptions }}{% else %}<span class="missing">{{ regulatory.not_specified }}</span>{% endif %}</div>
+      {%- if regulatory.informed_consent %}
+      <div><span class="rlabel">Informed consent</span>{{ regulatory.informed_consent }}</div>
+      {%- endif %}
+      {%- if regulatory.at_risk_populations %}
+      <div><span class="rlabel">At-risk populations</span>{{ regulatory.at_risk_populations }}</div>
+      {%- endif %}
+    </div>
+  </div>
+</section>
+
+{#- -------------------------------------------------------------- use cases #}
+{%- if use_cases %}
+<section id="ai-readiness">
+  <h2>AI Ready Details</h2>
+  <div class="kv">
+    {%- for row in use_cases %}
+    {{ kv(row) }}
+    {%- endfor %}
+  </div>
+</section>
+{%- endif %}
+
+{#- ----------------------------------------------------------------- review #}
+{%- if review %}
+<section id="ai-ready-review">
+  <h2>AI-Ready Review</h2>
+  <div class="score-head">
+    <span class="score-total">{{ review.estimated }}/{{ review.criteria_total }}</span>
+    <span class="score-sub">
+      criteria with a mechanical estimate &middot;
+      {{ review.tally['Substantive'] }} substantive,
+      {{ review.tally['Partial'] }} partial,
+      {{ review.tally['Absent'] }} absent,
+      {{ review.tally['Human review'] }} awaiting human review
+    </span>
+  </div>
+  <p class="page-note">
+    {{ review.rubric }}. Estimates are a mechanical application of the scoring
+    rules to the extracted evidence; criteria calling for human judgment are
+    left unscored rather than assumed.
+    {%- if not review.network_checks %} Generated without network checks.{% endif %}
+    {%- if links.review_html %} The <a href="{{ links.review_html }}">review page</a> lists every piece of evidence.{% endif %}
+  </p>
+  {%- for section in review.sections %}
+  <details class="crit">
+    <summary>
+      <span class="crit-name">{{ section.number }}. {{ section.title }}{% if section.gating %} &middot; gating{% endif %}</span>
+      <span class="bar rbar">{% for seg in section.segments %}<i class="{{ seg.cls }}" style="width: {{ seg.pct }}%"></i>{% endfor %}</span>
+      <span class="pts" title="points over {{ section.estimated }} estimated criteria">{{ section.points }}/{{ section.possible }} pts</span>
+    </summary>
+    {%- for criterion in section.criteria %}
+    <div class="rubric">
+      <div class="r-head">
+        <span class="r-id">{{ criterion.id }}</span>
+        <span class="r-name">{{ criterion.name }}</span>
+        <span class="badge {% if criterion.score is none %}sna{% else %}s{{ criterion.score }}{% endif %}">{{ criterion.label }}</span>
+      </div>
+      {%- if criterion.basis %}
+      <ul>{% for reason in criterion.basis %}<li>{{ reason }}</li>{% endfor %}</ul>
+      {%- endif %}
+      {%- if criterion.error %}
+      <ul class="gaps"><li>{{ criterion.error }}</li></ul>
+      {%- endif %}
+      <p>{{ criterion.evidence_count }} evidence item{{ '' if criterion.evidence_count == 1 else 's' }} collected.</p>
+    </div>
+    {%- endfor %}
+  </details>
+  {%- endfor %}
+</section>
+{%- endif %}
+
+{#- ------------------------------------------------------------ composition #}
+<section id="composition">
+  <h2>Composition{% if composition.is_release %} <span class="h2-count">{{ composition.count }} dataset{{ '' if composition.count == 1 else 's' }}</span>{% endif %}</h2>
+  {%- if composition.show_index %}
+  <h3>Datasets at a glance</h3>
+  <p class="hint">Filter by name, keyword or format. Select a row to jump to that dataset&rsquo;s details.</p>
+  <div class="toolbar">
+    <input type="search" id="dataset-filter" class="filter" placeholder="Filter datasets&hellip;" aria-label="Filter datasets" autocomplete="off">
+    <span id="dataset-filter-count" class="filter-count"></span>
+  </div>
+  <div class="table-scroll">
+    <table class="index">
+      <thead><tr><th>Dataset</th><th class="nowrap">Size</th><th class="nowrap">Files</th><th class="nowrap">Activities</th><th class="nowrap">With provenance</th><th class="nowrap">Schemas</th><th>Formats</th></tr></thead>
+      <tbody>
+        {%- for item in composition.cards %}
+        <tr class="idx-row" data-target="{{ item.anchor }}" data-search="{{ item.search }}">
+          <td><a class="jump" href="#{{ item.anchor }}">{{ item.name }}</a></td>
+          <td class="mono nowrap">{{ item.size or '—' }}</td>
+          <td class="mono nowrap">{{ item.details.files }}</td>
+          <td class="mono nowrap">{{ item.details.activities }}</td>
+          <td class="mono nowrap">{{ item.details.with_provenance }} <span class="muted">/ {{ item.details.files }}</span></td>
+          <td class="mono nowrap">{{ item.details.schemas }}</td>
+          <td class="mono small">{% for fmt in item.details.file_formats %}{{ fmt.label }}{% if not loop.last %}, {% endif %}{% else %}—{% endfor %}</td>
+        </tr>
+        {%- endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p id="dataset-no-matches" class="hint" hidden>No datasets match your filter.</p>
+  {%- endif %}
+
+  {%- for item in composition.cards %}
+  {%- set d = item.details %}
+  <details class="card" id="{{ item.anchor }}" data-search="{{ item.search }}"{% if composition.count == 1 %} open{% endif %}>
+    <summary class="card-head">
+      <span class="card-title">{{ item.name }}</span>
+      <span class="card-chips">
+        {%- if item.size %}<span class="tag">{{ item.size }}</span>{% endif %}
+        <span class="tag">{{ d.files }} file{{ '' if d.files == 1 else 's' }}</span>
+        {%- if d.computations %}<span class="tag">{{ d.computations }} computation{{ '' if d.computations == 1 else 's' }}</span>{% endif %}
+        {%- if d.experiments %}<span class="tag">{{ d.experiments }} experiment{{ '' if d.experiments == 1 else 's' }}</span>{% endif %}
+        {%- for fmt in d.file_formats[:3] %}<span class="tag fmt">{{ fmt.label }}</span>{% endfor %}
+      </span>
+    </summary>
+    <div class="card-body">
+      <div class="kv compact">
+        {{ pair('RO-Crate ID', item.id, item.id_href, true) }}
+        {{ pair('Description', item.description) }}
+        {{ pair('Authors', item.authors) }}
+        {{ pair('Date', item.date) }}
+        {{ pair('Version', item.version, '', true) }}
+        {{ pair('Size', item.size, '', true) }}
+        {{ pair('Publisher', item.publisher) }}
+        {{ pair('DOI', item.doi, item.doi_href) }}
+        {%- if item.license %}{{ pair('License', item.license, item.license_href) }}{% else %}
+        <div><div class="label">License</div><div class="value"><span class="missing">Not specified</span></div></div>
+        {%- endif %}
+        {{ pair('Keywords', item.keywords|join(', ')) }}
+        {%- if item.statistics %}{{ pair('Statistics / QC report', item.statistics.name, item.statistics.href) }}{% endif %}
+        {{ pair('Provenance graph', item.evidence_label, item.evidence_href, true) }}
+        {{ pair('Access', item.access_href, item.access_href) }}
+      </div>
+      {%- set more = item.contact or item.md5 or item.copyright or item.terms_of_use or item.confidentiality or item.funder or item.publications %}
+      {%- if more %}
+      <details class="more">
+        <summary>More metadata</summary>
+        <div class="kv compact">
+          {{ pair('Contact', item.contact, item.contact_href) }}
+          {{ pair('Confidentiality', item.confidentiality) }}
+          {{ pair('Copyright', item.copyright) }}
+          {{ pair('Terms of use', item.terms_of_use, item.terms_href) }}
+          {{ pair('Funding', item.funder) }}
+          {{ pair('MD5', item.md5, '', true) }}
+          {%- if item.publications %}
+          <div>
+            <div class="label">Related publications</div>
+            <div class="value"><ul class="plain">{% for pub in item.publications %}<li>{{ pub }}</li>{% endfor %}</ul></div>
+          </div>
+          {%- endif %}
+          {{ pair('Metadata file', item.metadata_path, '', true) }}
+        </div>
+      </details>
+      {%- endif %}
+
+      <h4>Content summary</h4>
+      <div class="cards4">
+        <div class="ccard">
+          <h5>Files <span class="n">{{ d.files }}</span></h5>
+          {%- if d.file_formats %}<div class="srow"><b>Formats</b> {{ tally(d.file_formats) }}</div>{% endif %}
+          {%- if d.file_access %}<div class="srow"><b>Access</b> {{ tally(d.file_access) }}</div>{% endif %}
+          {%- if d.files and d.with_provenance is not none %}<div class="srow"><b>With provenance</b> {{ d.with_provenance }} of {{ d.files }}</div>{% endif %}
+        </div>
+        <div class="ccard">
+          <h5>Software &amp; instruments <span class="n">{{ d.software + d.instruments }}</span></h5>
+          <div class="srow"><b>Software</b> {{ d.software }}{% if d.software_formats %} <span class="muted">({{ tally(d.software_formats) }})</span>{% endif %}</div>
+          <div class="srow"><b>Instruments</b> {{ d.instruments }}</div>
+        </div>
+        <div class="ccard">
+          <h5>Inputs <span class="n">{{ d.inputs }}</span></h5>
+          {%- if d.cell_lines %}<div class="srow"><b>Derived from</b> {% for line in d.cell_lines %}{{ line.name }}{% if line.organism %} <span class="muted">({{ line.organism }})</span>{% endif %}{% if not loop.last %}, {% endif %}{% endfor %}</div>{% endif %}
+          {%- if d.organisms %}<div class="srow"><b>Organisms</b> {{ tally(d.organisms) }}</div>{% endif %}
+          {%- if d.input_datasets %}
+          <div class="srow"><b>Datasets</b> {{ d.inputs }}</div>
+          <div class="srow indent">{{ tally(d.input_datasets) }}</div>
+          {%- elif not d.cell_lines %}<div class="srow muted">No inputs declared.</div>{% endif %}
+        </div>
+        <div class="ccard">
+          <h5>Other components</h5>
+          <div class="srow"><b>Experiments</b> {{ d.experiments }}</div>
+          {%- if d.experiment_types %}<div class="srow indent">{{ tally(d.experiment_types) }}</div>{% endif %}
+          {%- for p in d.experiment_patterns.rows %}<div class="srow indent">{{ pattern(p) }}</div>{% endfor %}
+          {%- if d.experiment_patterns.more %}<div class="srow indent muted">+{{ d.experiment_patterns.more }} more patterns</div>{% endif %}
+          <div class="srow"><b>Computations</b> {{ d.computations }}</div>
+          {%- for p in d.computation_patterns.rows %}<div class="srow indent">{{ pattern(p) }}</div>{% endfor %}
+          {%- if d.computation_patterns.more %}<div class="srow indent muted">+{{ d.computation_patterns.more }} more patterns</div>{% endif %}
+          {%- if d.computations and item.preview_href %}<div class="srow indent muted">Inputs, outputs and commands are listed in the <a href="{{ item.preview_href }}">full dataset details</a>.</div>{% endif %}
+          <div class="srow"><b>Schemas</b> {{ d.schemas }}</div>
+          <div class="srow"><b>Other</b> {{ d.other }}</div>
+        </div>
+      </div>
+      {%- if item.preview_href %}
+      <p class="view-full"><a class="btn" href="{{ item.preview_href }}">View full dataset details</a></p>
+      {%- endif %}
+    </div>
+  </details>
+  {%- endfor %}
+</section>
+
+{#- ----------------------------------------------------------- distribution #}
+{%- if distribution %}
+<section id="distribution">
+  <h2>Distribution Information</h2>
+  <div class="kv">
+    {%- for row in distribution %}
+    {{ kv(row) }}
+    {%- endfor %}
+  </div>
+</section>
+{%- endif %}
+{% endblock %}
+
+{% block footer %}
+<footer>
+  <p>Datasheet provenance: this datasheet and its metadata were generated by the FAIRSCAPE AI-readiness platform (Al Manir et al. 2024, bioRxiv 2024.12.23.629818; <a href="https://doi.org/10.1101/2024.12.23.629818" target="_blank" rel="noopener">https://doi.org/10.1101/2024.12.23.629818</a>).</p>
+  <p>Generated by fairscape-artifacts{% if source %} from {{ source }}{% endif %} on {{ generated_at }}.</p>
+</footer>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  var body = document.body;
+
+  /* Sidebar toggle (narrow screens; the sidebar is docked on wide ones). */
+  var toggle = document.getElementById("sidebar-toggle");
+  var sidebar = document.getElementById("sidebar");
+  if (toggle && sidebar) {
+    function setOpen(open) {
+      sidebar.classList.toggle("active", open);
+      body.classList.toggle("sidebar-active", open);
+      toggle.setAttribute("aria-expanded", open ? "true" : "false");
+    }
+    toggle.setAttribute("aria-expanded", "false");
+    toggle.addEventListener("click", function () {
+      setOpen(!sidebar.classList.contains("active"));
+    });
+    sidebar.addEventListener("click", function (e) {
+      if (e.target.closest("a[href^='#']")) setOpen(false);
+    });
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape") setOpen(false);
+    });
+  }
+
+  /* Jump to a dataset card and open it. */
+  function openCard(id) {
+    var card = document.getElementById(id);
+    if (card && card.tagName.toLowerCase() === "details") card.open = true;
+    return card;
+  }
+  function jumpToCard(id) {
+    var card = openCard(id);
+    if (card) card.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+  body.addEventListener("click", function (e) {
+    var link = e.target.closest('a[href^="#subcrate-"]');
+    if (link) {
+      var id = link.getAttribute("href").slice(1);
+      e.preventDefault();
+      jumpToCard(id);
+      history.replaceState(null, "", "#" + id);
+      return;
+    }
+    var row = e.target.closest(".idx-row");
+    if (row && !e.target.closest("a")) jumpToCard(row.getAttribute("data-target"));
+  });
+  if (location.hash.indexOf("#subcrate-") === 0) openCard(location.hash.slice(1));
+  window.addEventListener("hashchange", function () {
+    if (location.hash.indexOf("#subcrate-") === 0) openCard(location.hash.slice(1));
+  });
+
+  /* Dataset filter: index rows and cards share a data-search string. */
+  var filter = document.getElementById("dataset-filter");
+  var countEl = document.getElementById("dataset-filter-count");
+  var noMatches = document.getElementById("dataset-no-matches");
+  if (filter) {
+    var rows = Array.prototype.slice.call(document.querySelectorAll(".idx-row"));
+    var cards = Array.prototype.slice.call(document.querySelectorAll("details.card"));
+    var total = cards.length;
+    function matches(el, q) {
+      return (el.getAttribute("data-search") || "").indexOf(q) !== -1;
+    }
+    function apply() {
+      var q = filter.value.trim().toLowerCase();
+      var shown = 0;
+      rows.forEach(function (r) { r.hidden = !!q && !matches(r, q); });
+      cards.forEach(function (c) {
+        var ok = !q || matches(c, q);
+        c.hidden = !ok;
+        if (ok) shown++;
+      });
+      if (noMatches) noMatches.hidden = shown !== 0;
+      if (countEl) countEl.textContent = q ? shown + " of " + total + " datasets" : "";
+    }
+    filter.addEventListener("input", apply);
+  }
+
+  /* Back to top. */
+  var toTop = document.getElementById("back-to-top");
+  if (toTop) {
+    window.addEventListener("scroll", function () {
+      toTop.classList.toggle("visible", window.scrollY > 400);
+    });
+    toTop.addEventListener("click", function () {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    });
+  }
+
+  /* Scrollspy: highlight the section in view. */
+  var navLinks = Array.prototype.slice.call(document.querySelectorAll('#sidebar a[href^="#"]'));
+  var linkById = {};
+  navLinks.forEach(function (a) { linkById[a.getAttribute("href").slice(1)] = a; });
+  var watched = Object.keys(linkById).map(function (id) { return document.getElementById(id); }).filter(Boolean);
+  if (watched.length && "IntersectionObserver" in window) {
+    var current = null;
+    var observer = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (!entry.isIntersecting) return;
+        var a = linkById[entry.target.id];
+        if (a && a !== current) {
+          if (current) current.classList.remove("active");
+          a.classList.add("active");
+          current = a;
+        }
+      });
+    }, { rootMargin: "-10% 0px -80% 0px", threshold: 0 });
+    watched.forEach(function (el) { observer.observe(el); });
+  }
+
+  /* Print: open every collapsible, then restore. */
+  var snapshot = [];
+  window.addEventListener("beforeprint", function () {
+    snapshot = [];
+    document.querySelectorAll("details").forEach(function (d) { snapshot.push([d, d.open]); d.open = true; });
+  });
+  window.addEventListener("afterprint", function () {
+    snapshot.forEach(function (pair) { pair[0].open = pair[1]; });
+    snapshot = [];
+  });
+});
+</script>
+{% endblock %}

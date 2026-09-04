@@ -1,0 +1,254 @@
+{% extends "base.html.j2" %}
+
+{% macro desc(item) -%}
+<td{% if item.description != item.description_short %} title="{{ item.description }}"{% endif %}>{{ item.description_short }}</td>
+{%- endmacro %}
+
+{% macro access(item) -%}
+<td>{% if item.access_href %}<a href="{{ item.access_href }}" target="_blank" rel="noopener">Access / download</a>{% else %}<span class="muted">{{ item.access }}</span>{% endif %}</td>
+{%- endmacro %}
+
+{% macro ident(item) -%}
+<td class="mono">{% if item.id_href %}<a href="{{ item.id_href }}">{{ item.id }}</a>{% else %}{{ item.id }}{% endif %}</td>
+{%- endmacro %}
+
+{% block nav %}
+{%- if datasheet_href or evidence_href %}
+<div class="topbar">
+  {%- if datasheet_href %}<a href="{{ datasheet_href }}">&larr; Datasheet</a>{% endif %}
+  {%- if evidence_href %}<a href="{{ evidence_href }}">Evidence graph &#8599;</a>{% endif %}
+</div>
+{%- endif %}
+{% endblock %}
+
+{% block main %}
+<section id="crate-summary">
+  <h2>RO-Crate Summary</h2>
+  <div class="kv">
+    {%- for row in rows %}
+    <div>
+      <div class="label">{{ row.label }}</div>
+      <div class="value{% if row.mono %} mono{% endif %}">{% if row.href %}<a href="{{ row.href }}"{% if row.href.startswith('http') %} target="_blank" rel="noopener"{% endif %}>{{ row.value }}</a>{% else %}{{ row.value }}{% endif %}</div>
+    </div>
+    {%- endfor %}
+    {%- if citation %}
+    <div><div class="label">Cite as</div><div class="value"><ul class="plain">{% for c in citation %}<li>{{ c }}</li>{% endfor %}</ul></div></div>
+    {%- endif %}
+    {%- if publications %}
+    <div><div class="label">Related publications</div><div class="value"><ul class="plain">{% for p in publications %}<li>{{ p }}</li>{% endfor %}</ul></div></div>
+    {%- endif %}
+  </div>
+</section>
+
+<section id="contents">
+  <h2>Contents <span class="h2-count">{{ entity_total }} entit{{ 'y' if entity_total == 1 else 'ies' }}</span></h2>
+  {%- if tabs %}
+  <div class="tabs" role="tablist">
+    {%- for tab in tabs %}
+    <button class="tab{% if loop.first %} active{% endif %}" role="tab" data-tab="{{ tab.key }}" aria-selected="{{ 'true' if loop.first else 'false' }}">{{ tab.label }} <span class="n">{{ tab.n }}</span></button>
+    {%- endfor %}
+  </div>
+  <div class="toolbar">
+    <input type="search" id="entity-filter" class="filter" placeholder="Filter this tab by name, description or identifier&hellip;" aria-label="Filter entities" autocomplete="off">
+    <span id="entity-filter-count" class="filter-count"></span>
+  </div>
+  {%- for tab in tabs %}
+  <div class="tab-panel" id="tab-{{ tab.key }}" role="tabpanel"{% if not loop.first %} hidden{% endif %}>
+    <div class="table-scroll">
+    {%- if tab.key == 'computations' %}
+    <table>
+      <thead><tr><th>Name</th><th>Description</th><th>Date</th><th>Identifier</th><th>Details</th></tr></thead>
+      <tbody>
+        {%- for item in tab.entries %}
+        <tr class="entity" data-search="{{ (item.name ~ ' ' ~ item.description ~ ' ' ~ item.id)|lower }}">
+          <td>{{ item.name }}</td>
+          {{ desc(item) }}
+          <td class="mono nowrap">{{ item.date }}</td>
+          {{ ident(item) }}
+          <td>{% if item.computation.inputs or item.computation.outputs or item.computation.software or item.computation.command %}<button class="toggle" data-toggle="c-{{ loop.index }}">Show details</button>{% else %}<span class="muted">None recorded</span>{% endif %}</td>
+        </tr>
+        <tr class="details-row" id="c-{{ loop.index }}" hidden>
+          <td colspan="5">
+            {%- set c = item.computation %}
+            {%- if c.inputs %}
+            <div class="io-heading">Inputs <span class="n">{{ c.inputs|length }}</span></div>
+            <table class="inner"><thead><tr><th>Name</th><th>Identifier</th><th>Format</th></tr></thead><tbody>
+              {%- for e in c.inputs %}<tr><td>{{ e.name }}{% if e.crate %} <span class="muted">(from {{ e.crate }})</span>{% endif %}</td><td class="mono">{{ e.id }}</td><td class="mono">{{ e.format or '—' }}</td></tr>{% endfor %}
+            </tbody></table>
+            {%- endif %}
+            {%- if c.outputs %}
+            <div class="io-heading">Outputs <span class="n">{{ c.outputs|length }}</span></div>
+            <table class="inner"><thead><tr><th>Name</th><th>Identifier</th><th>Format</th></tr></thead><tbody>
+              {%- for e in c.outputs %}<tr><td>{{ e.name }}</td><td class="mono">{{ e.id }}</td><td class="mono">{{ e.format or '—' }}</td></tr>{% endfor %}
+            </tbody></table>
+            {%- endif %}
+            {%- if c.software %}
+            <div class="io-heading">Software used</div>
+            <table class="inner"><thead><tr><th>Name</th><th>Identifier</th></tr></thead><tbody>
+              {%- for e in c.software %}<tr><td>{{ e.name }}</td><td class="mono">{{ e.id }}</td></tr>{% endfor %}
+            </tbody></table>
+            {%- endif %}
+            {%- if c.parameters %}
+            <div class="io-heading">Parameters</div>
+            <p class="mono small">{{ c.parameters|join(' · ') }}</p>
+            {%- endif %}
+            {%- if c.command %}
+            <div class="io-heading">Command</div>
+            <code class="cmd">{{ c.command }}</code>
+            {%- endif %}
+          </td>
+        </tr>
+        {%- endfor %}
+      </tbody>
+    </table>
+    {%- elif tab.key == 'schemas' %}
+    <table>
+      <thead><tr><th>Name</th><th>Description</th><th>Identifier</th><th>Properties</th></tr></thead>
+      <tbody>
+        {%- for item in tab.entries %}
+        <tr class="entity" data-search="{{ (item.name ~ ' ' ~ item.description ~ ' ' ~ item.id)|lower }}">
+          <td>{{ item.name }}</td>
+          {{ desc(item) }}
+          {{ ident(item) }}
+          <td>{% if item.properties %}<button class="toggle" data-toggle="s-{{ loop.index }}">Show {{ item.properties|length }} propert{{ 'y' if item.properties|length == 1 else 'ies' }}</button>{% else %}<span class="muted">None recorded</span>{% endif %}</td>
+        </tr>
+        {%- if item.properties %}
+        <tr class="details-row" id="s-{{ loop.index }}" hidden>
+          <td colspan="4">
+            <table class="inner"><thead><tr><th>Property</th><th>Type</th><th>Description</th></tr></thead><tbody>
+              {%- for p in item.properties %}<tr><td class="mono">{{ p.name }}</td><td class="mono">{{ p.type }}</td><td>{{ p.description or '—' }}</td></tr>{% endfor %}
+            </tbody></table>
+          </td>
+        </tr>
+        {%- endif %}
+        {%- endfor %}
+      </tbody>
+    </table>
+    {%- elif tab.key in ('datasets', 'software') %}
+    <table>
+      <thead><tr><th>Name</th><th>Description</th><th>Format</th><th>Size</th><th>Access</th><th>Date</th><th>Identifier</th></tr></thead>
+      <tbody>
+        {%- for item in tab.entries %}
+        <tr class="entity" data-search="{{ (item.name ~ ' ' ~ item.description ~ ' ' ~ item.id ~ ' ' ~ item.format)|lower }}">
+          <td>{{ item.name }}</td>
+          {{ desc(item) }}
+          <td class="mono nowrap">{{ item.format or '—' }}</td>
+          <td class="mono nowrap">{{ item.size or '—' }}</td>
+          {{ access(item) }}
+          <td class="mono nowrap">{{ item.date }}</td>
+          {{ ident(item) }}
+        </tr>
+        {%- endfor %}
+      </tbody>
+    </table>
+    {%- elif tab.key == 'experiments' %}
+    <table>
+      <thead><tr><th>Name</th><th>Description</th><th>Type</th><th>Date</th><th>Identifier</th></tr></thead>
+      <tbody>
+        {%- for item in tab.entries %}
+        <tr class="entity" data-search="{{ (item.name ~ ' ' ~ item.description ~ ' ' ~ item.id ~ ' ' ~ item.experiment_type)|lower }}">
+          <td>{{ item.name }}</td>
+          {{ desc(item) }}
+          <td>{{ item.experiment_type or '—' }}</td>
+          <td class="mono nowrap">{{ item.date }}</td>
+          {{ ident(item) }}
+        </tr>
+        {%- endfor %}
+      </tbody>
+    </table>
+    {%- elif tab.key == 'instruments' %}
+    <table>
+      <thead><tr><th>Name</th><th>Description</th><th>Manufacturer</th><th>Identifier</th></tr></thead>
+      <tbody>
+        {%- for item in tab.entries %}
+        <tr class="entity" data-search="{{ (item.name ~ ' ' ~ item.description ~ ' ' ~ item.id ~ ' ' ~ item.manufacturer)|lower }}">
+          <td>{{ item.name }}</td>
+          {{ desc(item) }}
+          <td>{{ item.manufacturer or '—' }}</td>
+          {{ ident(item) }}
+        </tr>
+        {%- endfor %}
+      </tbody>
+    </table>
+    {%- else %}
+    <table>
+      <thead><tr><th>Name</th><th>Description</th><th>Type</th><th>Identifier</th></tr></thead>
+      <tbody>
+        {%- for item in tab.entries %}
+        <tr class="entity" data-search="{{ (item.name ~ ' ' ~ item.description ~ ' ' ~ item.id ~ ' ' ~ item.types)|lower }}">
+          <td>{{ item.name }}</td>
+          {{ desc(item) }}
+          <td class="mono small">{{ item.types }}</td>
+          {{ ident(item) }}
+        </tr>
+        {%- endfor %}
+      </tbody>
+    </table>
+    {%- endif %}
+    </div>
+    <p class="hint no-matches" hidden>Nothing in this tab matches your filter.</p>
+  </div>
+  {%- endfor %}
+  {%- else %}
+  <p class="page-note">This crate lists no entities.</p>
+  {%- endif %}
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  var tabs = Array.prototype.slice.call(document.querySelectorAll(".tab"));
+  var panels = Array.prototype.slice.call(document.querySelectorAll(".tab-panel"));
+  var filter = document.getElementById("entity-filter");
+  var countEl = document.getElementById("entity-filter-count");
+
+  function activePanel() {
+    return panels.filter(function (p) { return !p.hidden; })[0];
+  }
+  function applyFilter() {
+    var panel = activePanel();
+    if (!panel) return;
+    var q = filter ? filter.value.trim().toLowerCase() : "";
+    var rows = Array.prototype.slice.call(panel.querySelectorAll("tr.entity"));
+    var shown = 0;
+    rows.forEach(function (r) {
+      var ok = !q || (r.getAttribute("data-search") || "").indexOf(q) !== -1;
+      r.hidden = !ok;
+      if (!ok) {
+        var next = r.nextElementSibling;
+        if (next && next.classList.contains("details-row")) next.hidden = true;
+      }
+      if (ok) shown++;
+    });
+    var none = panel.querySelector(".no-matches");
+    if (none) none.hidden = shown !== 0 || rows.length === 0;
+    if (countEl) countEl.textContent = q ? shown + " of " + rows.length : "";
+  }
+
+  tabs.forEach(function (tab) {
+    tab.addEventListener("click", function () {
+      tabs.forEach(function (t) { t.classList.remove("active"); t.setAttribute("aria-selected", "false"); });
+      tab.classList.add("active");
+      tab.setAttribute("aria-selected", "true");
+      var key = tab.getAttribute("data-tab");
+      panels.forEach(function (p) { p.hidden = p.id !== "tab-" + key; });
+      applyFilter();
+    });
+  });
+
+  document.querySelectorAll(".toggle").forEach(function (button) {
+    button.addEventListener("click", function () {
+      var row = document.getElementById(button.getAttribute("data-toggle"));
+      if (!row) return;
+      row.hidden = !row.hidden;
+      button.textContent = row.hidden
+        ? button.textContent.replace(/^Hide/, "Show")
+        : button.textContent.replace(/^Show/, "Hide");
+    });
+  });
+
+  if (filter) filter.addEventListener("input", applyFilter);
+});
+</script>
+{% endblock %}

@@ -1,0 +1,37 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "fairscape-artifacts"
+version = "0.1.0"
+description = "Generate datasheets, evidence graphs and AI-Ready reviews from a local RO-Crate"
+requires-python = ">=3.9"
+license = { text = "Apache-2.0" }
+dependencies = [
+    # The only hard dependency. The evidence graph engine, the crate reader
+    # and the input/output derivation are standard library only, and the
+    # React Flow viewer is a checked-in build (see static/PROVENANCE.md), so
+    # installing this does not need a node toolchain.
+    "jinja2>=3.0",
+]
+
+[project.optional-dependencies]
+# AI-Ready review. Scoring is not reimplemented here: the rubric lives in
+# `aireadiness_evidence`, shipped by the fairscape-grader repo. Without it
+# every other command still works and the datasheet omits its review section.
+review = ["fairscape-wizard>=0.3.0"]
+test = ["pytest>=7"]
+
+[project.scripts]
+fairscape-artifacts = "fairscape_artifacts.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["fairscape_artifacts"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"fairscape_artifacts/static" = "fairscape_artifacts/static"
+"fairscape_artifacts/templates" = "fairscape_artifacts/templates"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

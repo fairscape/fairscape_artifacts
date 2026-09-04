@@ -1,0 +1,127 @@
+/* Direction A — "Technical Precision". Hairline borders instead of shadows,
+   2px radius, ink/slate text ramp, mono for ARKs/counts, amber unused here
+   (no CTA on a generated document). Palette mirrors ../web theme.ts. */
+:root {
+  --primary: #005f73;
+  --primary-tint: #ebf2f4;
+  --bg: #f7f9f9;
+  --surface: #ffffff;
+  --ink: #18242a;
+  --ink2: #51626b;
+  --ink3: #84939a;
+  --border: #e2e8ea;
+  --border-strong: #c3ced2;
+  --hero: #0a2127;
+  --hero-sub: #9fb9bf;
+  --hero-accent: #5fb3bf;
+  --success: #40916c;
+  --warning: #b27300;
+  --danger: #d00000;
+  --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  font-size: 15px;
+  line-height: 1.55;
+}
+main { max-width: 960px; margin: 0 auto; padding: 0 24px 64px; }
+a { color: var(--primary); }
+
+/* Hero */
+header.hero { background: var(--hero); color: #fff; padding: 40px 24px 32px; }
+.hero-inner { max-width: 960px; margin: 0 auto; }
+.hero .kicker {
+  font-family: var(--mono); font-size: 12px; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--hero-accent); margin: 0 0 8px;
+}
+.hero h1 { margin: 0 0 6px; font-size: 26px; line-height: 1.25; }
+.hero .ark { font-family: var(--mono); font-size: 13px; color: var(--hero-sub); }
+.hero .desc { color: var(--hero-sub); max-width: 70ch; margin: 14px 0 0; }
+.hero .chips { margin-top: 16px; }
+.chip {
+  display: inline-block; font-family: var(--mono); font-size: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.25); border-radius: 2px;
+  padding: 2px 8px; margin: 0 6px 6px 0; color: #fff;
+}
+
+/* Sections */
+section { margin-top: 36px; }
+h2 {
+  font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink3); font-family: var(--mono); font-weight: 500;
+  border-bottom: 1px solid var(--border); padding-bottom: 6px; margin: 0 0 16px;
+}
+
+/* Metadata grid */
+.meta { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1px; background: var(--border); border: 1px solid var(--border); }
+.meta > div { background: var(--surface); padding: 12px 16px; }
+.meta .label { font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink3); margin-bottom: 2px; }
+.meta .value { color: var(--ink); overflow-wrap: anywhere; }
+.meta .value.mono { font-family: var(--mono); font-size: 13px; }
+
+/* Summary tiles */
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 1px; background: var(--border); border: 1px solid var(--border); }
+.tile { background: var(--surface); padding: 14px 16px; }
+.tile .n { font-family: var(--mono); font-size: 22px; color: var(--ink); }
+.tile .label { font-size: 12px; color: var(--ink2); }
+
+.formats { margin-top: 12px; color: var(--ink2); font-size: 13px; }
+.formats .fmt { font-family: var(--mono); background: var(--primary-tint); border-radius: 2px; padding: 1px 6px; margin-right: 8px; white-space: nowrap; }
+
+/* Tables */
+table { width: 100%; border-collapse: collapse; background: var(--surface); border: 1px solid var(--border); }
+th { font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink3); font-weight: 500; text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--border-strong); }
+td { padding: 8px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+tr:last-child td { border-bottom: none; }
+td.mono { font-family: var(--mono); font-size: 12.5px; color: var(--ink2); overflow-wrap: anywhere; }
+.table-scroll { overflow-x: auto; }
+
+/* AI-Ready score */
+.score-head { display: flex; align-items: baseline; gap: 16px; margin-bottom: 16px; }
+.score-total { font-family: var(--mono); font-size: 32px; }
+.score-sub { color: var(--ink2); font-size: 13px; }
+.crit { border: 1px solid var(--border); background: var(--surface); margin-bottom: 8px; }
+.crit summary { display: flex; align-items: center; gap: 12px; padding: 10px 14px; cursor: pointer; list-style: none; }
+.crit summary::-webkit-details-marker { display: none; }
+.crit .crit-name { flex: 0 0 220px; font-weight: 600; font-size: 14px; }
+.bar { flex: 1; height: 6px; background: var(--primary-tint); border-radius: 2px; overflow: hidden; }
+.bar > i { display: block; height: 100%; background: var(--primary); }
+.crit .pts { font-family: var(--mono); font-size: 12.5px; color: var(--ink2); flex: 0 0 70px; text-align: right; }
+.rubric { border-top: 1px solid var(--border); padding: 10px 14px; }
+.rubric .r-head { display: flex; gap: 10px; align-items: baseline; }
+.rubric .r-id { font-family: var(--mono); font-size: 12px; color: var(--ink3); }
+.rubric .r-name { font-weight: 600; font-size: 13.5px; }
+.badge { font-family: var(--mono); font-size: 11px; border-radius: 2px; padding: 1px 7px; margin-left: auto; }
+.badge.s2 { color: var(--success); border: 1px solid var(--success); }
+.badge.s1 { color: var(--warning); border: 1px solid var(--warning); }
+.badge.s0 { color: var(--danger); border: 1px solid var(--danger); }
+.rubric p { margin: 6px 0 0; color: var(--ink2); font-size: 13px; }
+.rubric ul { margin: 6px 0 0; padding-left: 20px; color: var(--ink2); font-size: 13px; }
+.rubric .gaps li { color: var(--warning); }
+
+/* Evidence graph page */
+#evidence-graph { min-height: 640px; }
+.page-note { color: var(--ink2); font-size: 13px; margin: 12px 0 20px; }
+
+footer { margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--border); color: var(--ink3); font-size: 12px; font-family: var(--mono); }
+
+/* ------------------------------------------------------------------ */
+/* Local addendum. Everything above this line is the recovered         */
+/* stylesheet, byte-for-byte; see PROVENANCE.md.                       */
+/* ------------------------------------------------------------------ */
+
+/* `auto-fill` keeps empty tracks, and the grid gap is painted with the
+   border colour, so a crate with only two populated types rendered a row
+   of blank grey cells. `auto-fit` collapses the empty tracks instead. The
+   metadata grid had the same problem on a crate with few populated fields. */
+.tiles { grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); }
+.meta { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+
+/* Criteria the rubric reserves for human judgment: shown as awaiting review,
+   which must not read as a failing score. */
+.badge.sna { color: var(--ink3); border: 1px solid var(--border-strong); }

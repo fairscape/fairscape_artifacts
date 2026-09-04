@@ -1,0 +1,3114 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Cell Maps for Artificial Intelligence - June 2026 Data Release (Beta) - RO-Crate Datasheet</title>
+    <style>
+      :root {
+        --color-primary: #1f3a52;
+        --color-primary-dark: #16293a;
+        --color-accent: #2d7dd2;
+        --color-bg: #f4f6f9;
+        --color-surface: #ffffff;
+        --color-surface-alt: #f8fafc;
+        --color-border: #e3e8ee;
+        --color-text: #24323f;
+        --color-text-muted: #5d6b7a;
+        --radius: 10px;
+        --radius-sm: 6px;
+        --shadow-card: 0 1px 2px rgba(16, 24, 40, 0.06),
+          0 1px 3px rgba(16, 24, 40, 0.1);
+        --font-sans: system-ui, -apple-system, "Segoe UI", Roboto,
+          "Helvetica Neue", Arial, sans-serif;
+      }
+      html {
+        scroll-behavior: smooth;
+      }
+      body {
+        font-family: var(--font-sans);
+        margin: 0;
+        padding: 0;
+        color: var(--color-text);
+        line-height: 1.55;
+        background-color: var(--color-bg);
+        transition: margin-left 0.3s ease-in-out;
+      }
+      .container {
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 20px 24px;
+        background-color: var(--color-surface);
+        box-shadow: var(--shadow-card);
+        transition: margin-left 0.3s ease-in-out;
+      }
+      [id] {
+        scroll-margin-top: 16px;
+      }
+
+      /* Hero header */
+      header {
+        margin-bottom: 18px;
+        padding: 26px 24px 22px;
+        border-radius: var(--radius);
+        background: linear-gradient(
+          135deg,
+          var(--color-primary-dark) 0%,
+          var(--color-primary) 55%,
+          #2a5078 100%
+        );
+        color: #fff;
+        print-color-adjust: exact;
+        -webkit-print-color-adjust: exact;
+      }
+      h1 {
+        font-size: 26px;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+        margin: 0 0 10px 0;
+        color: #fff;
+      }
+      .badge-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .badge {
+        display: inline-block;
+        padding: 3px 12px;
+        border-radius: 999px;
+        background-color: rgba(255, 255, 255, 0.14);
+        border: 1px solid rgba(255, 255, 255, 0.28);
+        color: #fff;
+        font-size: 12.5px;
+        font-weight: 600;
+        text-decoration: none;
+        white-space: nowrap;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        print-color-adjust: exact;
+        -webkit-print-color-adjust: exact;
+      }
+      a.badge:hover {
+        background-color: rgba(255, 255, 255, 0.26);
+      }
+
+      h2 {
+        font-size: 19px;
+        color: var(--color-primary);
+        margin-top: 14px;
+        margin-bottom: 10px;
+        padding-left: 10px;
+        border-left: 4px solid var(--color-accent);
+        letter-spacing: -0.01em;
+      }
+      h3 {
+        font-size: 17px;
+        color: var(--color-primary);
+        margin-top: 10px;
+        margin-bottom: 6px;
+      }
+      h4 {
+        font-size: 15px;
+        color: var(--color-primary);
+        margin-top: 8px;
+        margin-bottom: 6px;
+      }
+
+      /* Card containers (shared by overview / use cases / distribution / subcrates) */
+      .summary-section,
+      .distribution-section,
+      .use-cases-section,
+      .subcrate-summary {
+        background-color: var(--color-surface);
+        padding: 16px 18px;
+        border-radius: var(--radius);
+        margin-bottom: 16px;
+        border: 1px solid var(--color-border);
+        box-shadow: var(--shadow-card);
+        break-inside: avoid;
+      }
+      .summary-row {
+        display: flex;
+        margin-bottom: 0;
+        border-bottom: 1px solid var(--color-border);
+        padding: 7px 0;
+      }
+      .summary-row:last-child {
+        border-bottom: none;
+      }
+      .summary-label {
+        width: 230px;
+        flex-shrink: 0;
+        font-weight: 600;
+        font-size: 13px;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        color: var(--color-text-muted);
+        padding-top: 2px;
+      }
+      .summary-value {
+        flex: 1;
+      }
+      .section-header {
+        margin: 16px 0 10px 0;
+      }
+      .composition-summary {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-bottom: 10px;
+      }
+      .composition-item {
+        background-color: var(--color-surface-alt);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-sm);
+        padding: 10px;
+        text-align: center;
+        width: calc(20% - 10px);
+        min-width: 120px;
+      }
+      .composition-count {
+        font-size: 24px;
+        font-weight: 700;
+        color: var(--color-primary);
+        display: block;
+        margin-bottom: 5px;
+      }
+      .composition-label {
+        color: var(--color-text-muted);
+      }
+      .subcrates-container {
+        margin-top: 15px;
+      }
+      .subcrate-metadata {
+        margin-bottom: 8px;
+      }
+      .metadata-item {
+        margin-bottom: 3px;
+        padding: 3px 0;
+        border-bottom: 1px solid var(--color-surface-alt);
+      }
+      .metadata-item:last-child {
+        border-bottom: none;
+      }
+      .metadata-label {
+        font-weight: 600;
+        color: var(--color-text-muted);
+        font-size: 13px;
+        margin-right: 10px;
+      }
+      .section-summary {
+        background-color: var(--color-surface);
+        border-radius: var(--radius-sm);
+        padding: 10px;
+        margin-top: 8px;
+        margin-bottom: 8px;
+        border: 1px solid var(--color-border);
+      }
+      .summary-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+        gap: 10px;
+      }
+      .summary-item {
+        margin-bottom: 8px;
+      }
+      details {
+        margin-top: 8px;
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-sm);
+        padding: 8px;
+        background-color: var(--color-surface-alt);
+      }
+      summary {
+        font-weight: 600;
+        cursor: pointer;
+        padding: 5px;
+        color: var(--color-primary);
+      }
+      .data-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 10px;
+      }
+      .data-table th,
+      .data-table td {
+        text-align: left;
+        padding: 8px;
+        border-bottom: 1px solid var(--color-border);
+      }
+      .data-table th {
+        background-color: var(--color-surface-alt);
+        font-weight: 600;
+        color: var(--color-primary);
+      }
+      .view-full-link {
+        margin-top: 8px;
+        text-align: right;
+      }
+      .view-full-link a {
+        display: inline-block;
+        padding: 8px 16px;
+        background-color: var(--color-primary);
+        color: white;
+        text-decoration: none;
+        border-radius: var(--radius-sm);
+        font-weight: 600;
+        font-size: 14px;
+      }
+      .view-full-link a:hover {
+        background-color: var(--color-primary-dark);
+      }
+      .distribution-item,
+      .use-cases-item {
+        margin-bottom: 0;
+        border-bottom: 1px solid var(--color-border);
+        padding: 7px 0;
+      }
+      .distribution-item:last-child,
+      .use-cases-item:last-child {
+        border-bottom: none;
+      }
+      .distribution-label,
+      .use-cases-label {
+        font-weight: 600;
+        font-size: 13px;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        color: var(--color-text-muted);
+        margin-bottom: 3px;
+      }
+      .publications-list {
+        margin-top: 5px;
+        padding-left: 15px;
+      }
+      .publications-list li {
+        margin-bottom: 8px;
+      }
+      .subcrate-error {
+        background-color: #fff0f0;
+        padding: 15px;
+        border-radius: var(--radius-sm);
+        margin-bottom: 20px;
+        border: 1px solid #ffcccb;
+      }
+      .subcrate-title {
+        border-bottom: 2px solid var(--color-accent);
+        padding-bottom: 6px;
+        margin-bottom: 10px;
+        color: var(--color-primary);
+      }
+      .sidebar-dropdown {
+        border: none;
+        padding: 0;
+        margin: 0;
+        background: none;
+      }
+      .sidebar-dropdown summary {
+        padding: 12px 15px;
+        font-size: 16px;
+        color: #f1f1f1;
+        cursor: pointer;
+        transition: 0.2s;
+      }
+      .sidebar-dropdown summary:hover {
+        background-color: var(--color-primary-dark);
+      }
+      .sidebar-subnav-link {
+        padding-left: 30px !important;
+        font-size: 14px !important;
+      }
+      .composition-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 8px;
+        margin-top: 8px;
+        margin-bottom: 8px;
+      }
+      .composition-card {
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-sm);
+        overflow: hidden;
+        box-shadow: var(--shadow-card);
+      }
+      .card-header {
+        background-color: var(--color-surface-alt);
+        padding: 10px 15px;
+        border-bottom: 1px solid var(--color-border);
+        display: flex;
+        align-items: center;
+      }
+      .card-icon {
+        font-size: 18px;
+        margin-right: 10px;
+      }
+      .card-title {
+        font-weight: 600;
+        color: var(--color-primary);
+        font-size: 14px;
+      }
+      .card-content {
+        padding: 8px 12px;
+      }
+      .card-stats {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .stat-item {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+      }
+      .stat-label {
+        font-weight: 600;
+        color: var(--color-text-muted);
+        min-width: 25px;
+        margin-right: 2px;
+      }
+      .stat-value {
+        color: var(--color-text);
+      }
+      .stat-detail {
+        font-size: 0.9em;
+        color: var(--color-text-muted);
+        margin-top: 3px;
+        margin-left: 5px;
+      }
+
+      .compact-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+        margin-top: 6px;
+        margin-bottom: 6px;
+      }
+      .summary-card {
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-sm);
+        overflow: hidden;
+        background-color: var(--color-surface);
+        break-inside: avoid;
+      }
+      .stat-row {
+        margin-bottom: 4px;
+        display: flex;
+        font-size: 0.95em;
+      }
+      .indent {
+        margin-left: 12px;
+        margin-bottom: 4px;
+      }
+      .small {
+        font-size: 0.9em;
+        color: var(--color-text-muted);
+      }
+      .compact-list {
+        margin: 0;
+        padding-left: 20px;
+      }
+      .compact-list li {
+        margin-bottom: 4px;
+      }
+      .subcrate-composition h4 {
+        margin-top: 8px;
+        margin-bottom: 4px;
+      }
+
+      footer {
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 16px 24px;
+        font-size: 13px;
+        color: var(--color-text-muted);
+        text-align: center;
+      }
+      footer a {
+        color: var(--color-primary);
+        text-decoration: none;
+      }
+      footer a:hover {
+        text-decoration: underline;
+      }
+
+      .regulatory-section {
+        margin-top: 12px;
+        margin-bottom: 4px;
+        padding: 0;
+      }
+      .regulatory-section h3 {
+        font-size: 16px;
+        color: var(--color-primary);
+        margin-bottom: 8px;
+        border-bottom: none;
+        padding-bottom: 0;
+      }
+      .regulatory-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+      }
+      .regulatory-item {
+        background-color: var(--color-surface-alt);
+        padding: 8px 10px;
+        border-radius: var(--radius-sm);
+        border: 1px solid var(--color-border);
+      }
+      .regulatory-label {
+        font-weight: 600;
+        color: var(--color-text-muted);
+        font-size: 13px;
+        margin-right: 5px;
+      }
+      .irb-detail {
+        background-color: var(--color-surface-alt);
+        padding: 8px 10px;
+        border-radius: var(--radius-sm);
+        border: 1px solid var(--color-border);
+        margin-top: 8px;
+      }
+      .irb-org {
+        margin-top: 6px;
+      }
+      .irb-name {
+        font-weight: 600;
+        display: block;
+      }
+      .irb-contact {
+        margin-top: 4px;
+        font-size: 0.95em;
+        color: var(--color-text-muted);
+      }
+      .irb-contact > * + *::before {
+        content: " | ";
+        color: #999;
+      }
+      .irb-contact-type {
+        font-style: italic;
+      }
+      .irb-address {
+        margin-top: 4px;
+        font-size: 0.9em;
+        color: var(--color-text-muted);
+      }
+      .regulatory-exemptions {
+        background-color: var(--color-surface-alt);
+        padding: 8px 10px;
+        border-radius: var(--radius-sm);
+        border: 1px solid var(--color-border);
+        margin-top: 8px;
+      }
+      .regulatory-exemptions p {
+        margin: 8px 0 0 0;
+        line-height: 1.5;
+      }
+
+      /* Sidebar navigation */
+      #sidebar {
+        height: 100%;
+        width: 250px;
+        position: fixed;
+        z-index: 1000;
+        top: 0;
+        left: 0;
+        background-color: var(--color-primary);
+        overflow-x: hidden;
+        transition: transform 0.3s ease-in-out;
+        padding-top: 60px;
+        transform: translateX(-100%);
+      }
+      #sidebar.active {
+        transform: translateX(0);
+      }
+      #sidebar a {
+        padding: 12px 15px;
+        text-decoration: none;
+        font-size: 16px;
+        color: #f1f1f1;
+        display: block;
+        transition: 0.2s;
+      }
+      #sidebar a:hover {
+        background-color: var(--color-primary-dark);
+      }
+      #sidebar .sidebar-title {
+        padding: 10px 15px;
+        font-size: 20px;
+        color: white;
+        font-weight: 700;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.18);
+        margin-bottom: 10px;
+      }
+      #sidebar-toggle {
+        position: fixed;
+        top: 15px;
+        left: 15px;
+        z-index: 1001;
+        background-color: var(--color-primary);
+        color: white;
+        border: none;
+        padding: 10px 15px;
+        cursor: pointer;
+        font-size: 18px;
+        border-radius: var(--radius-sm);
+        box-shadow: var(--shadow-card);
+        transition: left 0.3s ease-in-out;
+      }
+      body.sidebar-active {
+        margin-left: 250px;
+      }
+      body.sidebar-active #sidebar-toggle {
+        left: 265px;
+      }
+
+      /* Executive Summary */
+      .executive-summary-section {
+        background-color: var(--color-surface);
+        padding: 16px 18px;
+        border-radius: var(--radius);
+        margin-bottom: 16px;
+        border: 1px solid var(--color-border);
+        box-shadow: var(--shadow-card);
+        break-inside: avoid;
+      }
+      .executive-summary-section h2 {
+        margin-top: 0;
+      }
+      .summary-description {
+        font-size: 13.5px;
+        color: var(--color-text-muted);
+        margin-bottom: 12px;
+      }
+      .stat-access-data {
+        margin-top: auto;
+        padding-top: 10px;
+        text-align: left;
+      }
+      .access-data-btn {
+        display: inline-block;
+        padding: 7px 16px;
+        background-color: var(--color-accent);
+        color: #ffffff;
+        font-size: 13px;
+        font-weight: 600;
+        text-decoration: none;
+        border-radius: var(--radius-sm);
+        border: none;
+        print-color-adjust: exact;
+        -webkit-print-color-adjust: exact;
+      }
+      .access-data-btn:hover {
+        background-color: #2468b0;
+        color: #ffffff;
+        text-decoration: none;
+      }
+      .exec-summary-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+      }
+      .exec-summary-item {
+        background-color: var(--color-surface-alt);
+        padding: 12px;
+        border-radius: var(--radius-sm);
+        border: 1px solid var(--color-border);
+        display: flex;
+        flex-direction: column;
+      }
+      .exec-summary-label {
+        font-weight: 600;
+        color: var(--color-text-muted);
+        display: block;
+        margin-bottom: 10px;
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+      .exec-summary-item .stat-item {
+        display: block;
+        margin-bottom: 4px;
+        font-size: 12px;
+      }
+      .stat-sub-label {
+        color: var(--color-text-muted);
+      }
+      .stat-sub-value {
+        color: var(--color-text);
+      }
+      .formats-list {
+        word-break: break-word;
+      }
+
+      /* Stat cards (big number + caption) */
+      .stat-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+        margin-bottom: 8px;
+      }
+      .stat-card {
+        background-color: var(--color-surface);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-sm);
+        padding: 10px 8px;
+        text-align: center;
+      }
+      .stat-number {
+        display: block;
+        font-size: 19px;
+        font-weight: 700;
+        color: var(--color-primary);
+        line-height: 1.2;
+        word-break: break-word;
+      }
+      .stat-caption {
+        display: block;
+        font-size: 11px;
+        color: var(--color-text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        margin-top: 2px;
+      }
+      .format-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        margin-top: 4px;
+      }
+      .chip {
+        display: inline-block;
+        padding: 1px 8px;
+        border-radius: 999px;
+        background-color: var(--color-surface);
+        border: 1px solid var(--color-border);
+        color: var(--color-text-muted);
+        font-size: 11px;
+      }
+
+      /* AI-Ready Score: donut + bars */
+      .aiready-flex {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+      }
+      .aiready-donut-wrap {
+        flex-shrink: 0;
+        text-align: center;
+      }
+      .aiready-donut {
+        display: block;
+      }
+      .aiready-donut .donut-track {
+        fill: none;
+        stroke: var(--color-border);
+        stroke-width: 12;
+      }
+      .aiready-donut .donut-fill {
+        fill: none;
+        stroke-width: 12;
+        stroke-linecap: round;
+        transform: rotate(-90deg);
+        transform-origin: 50% 50%;
+      }
+      .aiready-donut .donut-text {
+        font-size: 24px;
+        font-weight: 700;
+        fill: var(--color-primary);
+        text-anchor: middle;
+        dominant-baseline: central;
+      }
+      .aiready-donut-caption {
+        font-size: 10px;
+        color: var(--color-text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        margin-top: 2px;
+      }
+      .aiready-bars {
+        margin-top: 2px;
+        flex: 1;
+        min-width: 0;
+      }
+      .aiready-bar-row {
+        display: flex;
+        align-items: center;
+        margin-bottom: 5px;
+      }
+      .aiready-bar-label {
+        width: 90px;
+        font-size: 10.5px;
+        font-weight: 600;
+        color: var(--color-text-muted);
+      }
+      .aiready-bar-track {
+        flex: 1;
+        height: 8px;
+        background: var(--color-border);
+        border-radius: 999px;
+        overflow: hidden;
+      }
+      .aiready-bar-fill {
+        height: 100%;
+        border-radius: 999px;
+        print-color-adjust: exact;
+        -webkit-print-color-adjust: exact;
+      }
+      .aiready-bar-score {
+        width: 34px;
+        font-size: 9.5px;
+        text-align: right;
+        color: var(--color-text-muted);
+        margin-left: 6px;
+      }
+      .view-details-link {
+        font-size: 11px;
+        font-weight: normal;
+        color: var(--color-accent);
+        text-decoration: none;
+        margin-left: 5px;
+        text-transform: none;
+        letter-spacing: normal;
+      }
+      .view-details-link:hover {
+        text-decoration: underline;
+      }
+
+      @media print {
+        body {
+          background-color: white;
+          margin-left: 0 !important;
+        }
+        body,
+        .container {
+          print-color-adjust: exact;
+          -webkit-print-color-adjust: exact;
+        }
+        .container {
+          box-shadow: none;
+          max-width: 100%;
+          padding: 10px;
+        }
+        .view-full-link,
+        #sidebar,
+        #sidebar-toggle {
+          display: none;
+        }
+        .summary-section,
+        .distribution-section,
+        .use-cases-section,
+        .subcrate-summary,
+        .executive-summary-section,
+        .summary-card,
+        .composition-card {
+          break-inside: avoid;
+          box-shadow: none;
+        }
+        details {
+          margin-bottom: 20px;
+        }
+        details > summary {
+          list-style: none;
+        }
+        details > summary::marker,
+        details > summary::-webkit-details-marker {
+          display: none;
+        }
+        details:not([open]) > *:not(summary) {
+          display: block;
+        }
+      }
+
+      @media (max-width: 768px) {
+        .compact-grid,
+        .regulatory-grid,
+        .exec-summary-grid {
+          grid-template-columns: 1fr;
+        }
+        .aiready-flex {
+          flex-direction: column;
+          align-items: stretch;
+        }
+        .summary-row {
+          flex-direction: column;
+        }
+        .summary-label {
+          width: auto;
+        }
+        body.sidebar-active {
+          margin-left: 0;
+        }
+        body.sidebar-active #sidebar-toggle {
+          left: 15px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <button id="sidebar-toggle">☰</button>
+
+    <nav id="sidebar">
+      <div class="sidebar-title">Navigation</div>
+      <a href="#datasheet-summary">Datasheet Summary</a>
+      <a href="#dataset-details">Dataset Details</a>
+      <a href="#ai-readiness">AI Ready Information</a>
+      <details class="sidebar-dropdown">
+        <summary>Composition</summary>
+        <a href="#composition" class="sidebar-subnav-link">All Datasets</a>
+        <a href="#subcrate-1" class="sidebar-subnav-link">EndoTag AP-MS Profiling of Chromatin Modifier Interactome Rewiring in MDA-MB-468 Cells Upon Paclitaxel Perturbation</a>
+        <a href="#subcrate-2" class="sidebar-subnav-link">EndoTag-AP-MS Profiling of Chromatin Modifier Interactome Rewiring in MDA-MB-468 Cells Upon Vorinostat Perturbation</a>
+        <a href="#subcrate-3" class="sidebar-subnav-link">Paclitaxel IF Images</a>
+        <a href="#subcrate-4" class="sidebar-subnav-link">Untreated IF Images</a>
+        <a href="#subcrate-5" class="sidebar-subnav-link">Vorinostat IF Images</a>
+        <a href="#subcrate-6" class="sidebar-subnav-link">SEC-MS characterization of KOLF2 neuronal and cardiomyocyte differentiation</a>
+        <a href="#subcrate-7" class="sidebar-subnav-link">SEC-MS of MDA-MB468 following treatment of vorinostat or paclitaxel.</a>
+        <a href="#subcrate-8" class="sidebar-subnav-link">Perturbation Cell Atlas of Human Induced Pluripotent Stem Cells - Raw Sequence Data</a>
+        <a href="#subcrate-9" class="sidebar-subnav-link">Perturbation Cell Atlas of Human Induced Pluripotent Stem Cells - Perturb Seq</a>
+      </details>
+    </nav>
+
+    <div class="container">
+      <header>
+        <h1 id="project-title">Cell Maps for Artificial Intelligence - June 2026 Data Release (Beta)</h1>
+        <div class="badge-row">
+          <span class="badge">Version 1.0</span>
+          <a class="badge" href="https://doi.org/10.18130/V3/HIGT4C" target="_blank" rel="noopener" title="https://doi.org/10.18130/V3/HIGT4C">DOI ↗</a>
+          <a class="badge" href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank" rel="noopener" title="https://creativecommons.org/licenses/by-nc-sa/4.0/">License ↗</a>
+          <span class="badge">19.9 TB</span>
+          <span class="badge">Released 2026-06-30</span>
+        </div>
+      </header>
+
+      <!-- Executive Summary with AI-Readiness Score -->
+      <div id="datasheet-summary" class="executive-summary-section">
+    <h2>Datasheet Summary</h2>
+    <p class="summary-description">This dataset is the June 2026 Data Release of Cell Maps for Artificial Intelligence (CM4AI; CM4AI.org), the Functional Genomics Grand Challenge in the NIH Bridge2AI program. This Beta release includes perturb-seq data in undifferentiated KOLF2.1J iPSCs; SEC-MS data in undifferentiated KOLF2.1J iPSCs and iPSC-derived NPCs, neurons, and cardiomyocytes; AP-MS data in MDA-MB-468 breast cancer cells in the presence of chemotherapy (vorinostat and paclitaxel); and IF images in MDA-MB-468 breast... <a href="#description" style="color: var(--color-accent); font-size: 12px;">[read full description]</a></p>
+
+    <div class="exec-summary-grid">
+        <div class="exec-summary-item">
+            <span class="exec-summary-label">Dataset Statistics</span>
+            <div class="stat-grid">
+                <div class="stat-card">
+                    <span class="stat-number">19.9 TB</span>
+                    <span class="stat-caption">Total Size</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-number">53,877</span>
+                    <span class="stat-caption">Datasets</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-number">1,976</span>
+                    <span class="stat-caption">Computations</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-number">6</span>
+                    <span class="stat-caption">Software</span>
+                </div>
+            </div>
+            <div class="stat-item">
+                <strong class="stat-sub-label">Available Formats:</strong>
+                <span class="format-chips">
+                    <span class="chip">.d</span>
+                    <span class="chip">.d directory group</span>
+                    <span class="chip">.tsv</span>
+                    <span class="chip">.xml</span>
+                    <span class="chip">TSV</span>
+                    <span class="chip">csv</span>
+                    <span class="chip">executable</span>
+                    <span class="chip">fastq.gz</span>
+                    <span class="chip">h5</span>
+                    <span class="chip">h5ad (+2 more)</span>
+                </span>
+            </div>
+        </div>
+
+        <div class="exec-summary-item aiready-item">
+            <span class="exec-summary-label">AI-Readiness Score <a href="ai_ready_score.json" class="view-details-link">(View Details)</a></span>
+            <div class="aiready-flex">
+                <div class="aiready-donut-wrap">
+                    <svg class="aiready-donut" width="108" height="108" viewBox="0 0 120 120" role="img" aria-label="Overall AI-readiness score: 100 percent">
+                        <circle class="donut-track" cx="60" cy="60" r="54"></circle>
+                        <circle class="donut-fill" cx="60" cy="60" r="54"
+                                stroke="#4CAF50"
+                                stroke-dasharray="339.3 339.3"></circle>
+                        <text class="donut-text" x="60" y="62">100%</text>
+                    </svg>
+                    <div class="aiready-donut-caption">Overall</div>
+                </div>
+                <div class="aiready-bars">
+                    <div class="aiready-bar-row">
+                        <div class="aiready-bar-label">Fairness</div>
+                        <div class="aiready-bar-track">
+                            <div class="aiready-bar-fill" style="width: 100.0%; background: #4CAF50;"></div>
+                        </div>
+                        <div class="aiready-bar-score">4/4</div>
+                    </div>
+                    <div class="aiready-bar-row">
+                        <div class="aiready-bar-label">Provenance</div>
+                        <div class="aiready-bar-track">
+                            <div class="aiready-bar-fill" style="width: 100.0%; background: #4CAF50;"></div>
+                        </div>
+                        <div class="aiready-bar-score">4/4</div>
+                    </div>
+                    <div class="aiready-bar-row">
+                        <div class="aiready-bar-label">Characterization</div>
+                        <div class="aiready-bar-track">
+                            <div class="aiready-bar-fill" style="width: 100.0%; background: #4CAF50;"></div>
+                        </div>
+                        <div class="aiready-bar-score">5/5</div>
+                    </div>
+                    <div class="aiready-bar-row">
+                        <div class="aiready-bar-label">Explainability</div>
+                        <div class="aiready-bar-track">
+                            <div class="aiready-bar-fill" style="width: 100.0%; background: #4CAF50;"></div>
+                        </div>
+                        <div class="aiready-bar-score">3/3</div>
+                    </div>
+                    <div class="aiready-bar-row">
+                        <div class="aiready-bar-label">Ethics</div>
+                        <div class="aiready-bar-track">
+                            <div class="aiready-bar-fill" style="width: 100.0%; background: #4CAF50;"></div>
+                        </div>
+                        <div class="aiready-bar-score">4/4</div>
+                    </div>
+                    <div class="aiready-bar-row">
+                        <div class="aiready-bar-label">Sustainability</div>
+                        <div class="aiready-bar-track">
+                            <div class="aiready-bar-fill" style="width: 100.0%; background: #4CAF50;"></div>
+                        </div>
+                        <div class="aiready-bar-score">4/4</div>
+                    </div>
+                    <div class="aiready-bar-row">
+                        <div class="aiready-bar-label">Computability</div>
+                        <div class="aiready-bar-track">
+                            <div class="aiready-bar-fill" style="width: 100.0%; background: #4CAF50;"></div>
+                        </div>
+                        <div class="aiready-bar-score">4/4</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+      <div id="dataset-details"><div class="summary-section">
+  <h2>Release Overview</h2>
+  <div class="summary-row">
+    <div class="summary-label">ROCrate ID</div>
+    <div class="summary-value" id="accession">
+      <a href="https://fairscape.net/ark:59853/rocrate-cell-maps-for-artificial-intelligence-June-2026-data-release">ark:59853/rocrate-cell-maps-for-artificial-intelligence-June-2026-data-release</a>
+    </div>
+  </div>
+  <div class="summary-row">
+    <div class="summary-label">DOI</div>
+    <div class="summary-value" id="doi">
+      <a href="https://doi.org/10.18130/V3/HIGT4C" target="_blank">https://doi.org/10.18130/V3/HIGT4C</a>
+    </div>
+  </div>
+  <div class="summary-row">
+    <div class="summary-label">Release Date</div>
+    <div class="summary-value" id="release-date">2026-06-30</div>
+  </div>
+  <div class="summary-row">
+    <div class="summary-label">Size</div>
+    <div class="summary-value" id="content-size">19.9 TB</div>
+  </div>
+  <div class="summary-row">
+    <div class="summary-label">Description</div>
+    <div class="summary-value" id="description">This dataset is the June 2026 Data Release of Cell Maps for Artificial Intelligence (CM4AI; CM4AI.org), the Functional Genomics Grand Challenge in the NIH Bridge2AI program. This Beta release includes perturb-seq data in undifferentiated KOLF2.1J iPSCs; SEC-MS data in undifferentiated KOLF2.1J iPSCs and iPSC-derived NPCs, neurons, and cardiomyocytes; AP-MS data in MDA-MB-468 breast cancer cells in the presence of chemotherapy (vorinostat and paclitaxel); and IF images in MDA-MB-468 breast cancer cells in the presence and absence of chemotherapy (vorinostat and paclitaxel). CM4AI output data are packaged with provenance graphs and rich metadata as AI-ready datasets in RO-Crate format using the FAIRSCAPE framework. Data presented here will be augmented regularly through the end of the project. CM4AI is a collaboration of UCSD, UCSF, Stanford, UVA, Yale, UA Birmingham, Simon Fraser University, and the Hastings Center.</div>
+  </div>
+  <div class="summary-row">
+    <div class="summary-label">Authors</div>
+    <div class="summary-value" id="authors">Clark, T, Parker, J, Al Manir, S, Axelsson, U, Ballllosero Navarro, F, Chinn, B, Churas, CP, Dailamy, A, Doctor, Y, Fall, J, Forget, A, Gao, J, Hansen, JN, Hu, M, Johannesson, A, Khaliq, H, Lee, YH, Lenkiewicz, J, Levinson, MA, Marquez, C, Metallo, C, Muralidharan, M, Nourreddine, S, Niestroy, J, Obernier, K, Pan, E, Polacco, B, Pratt, D, Qian, G, Schaffer, L, Sigaeva, A, Thaker, S, Zhang, Y, Bélisle-Pipon, JC, Brandt, C, Chen, JY, Ding, Y, Fodeh, S, Krogan, N, Lundberg, E, Mali, P, Payne-Foster, P, Ratcliffe, S, Ravitsky, V, Sali, A, Schulz, W, Ideker, T</div>
+  </div>
+  <div class="summary-row">
+    <div class="summary-label">Publisher</div>
+    <div class="summary-value" id="publisher">https://dataverse.lib.virginia.edu/</div>
+  </div>
+  <div class="summary-row">
+    <div class="summary-label">Principal Investigator</div>
+    <div class="summary-value" id="principal-investigator">
+      Trey Ideker
+    </div>
+  </div>
+  <div class="summary-row">
+    <div class="summary-label">Contact Email</div>
+    <div class="summary-value" id="contact-email">
+      <a href="mailto:tideker@health.ucsd.edu">tideker@health.ucsd.edu</a>
+    </div>
+  </div>
+   <div class="summary-row">
+    <div class="summary-label">Data Governance Committee</div>
+    <div class="summary-value" id="data-governance">Jilian Parker</div>
+  </div>
+   <div class="summary-row">
+    <div class="summary-label">Ethical Review</div>
+    <div class="summary-value" id="data-governance">Vardit Ravistky ravitskyv@thehastingscenter.org and Jean-Christophe Belisle-Pipon jean-christophe_belisle-pipon@sfu.ca.</div>
+  </div>
+  <div class="summary-row">
+    <div class="summary-label">Copyright</div>
+    <div class="summary-value" id="copyright">Copyright (c) 2026 The Regents of the University of California except where otherwise noted. Spatial proteomics raw image data is copyright (c) 2026 The Board of Trustees of the Leland Stanford Junior University.</div>
+  </div>
+  <div class="summary-row">
+    <div class="summary-label">License</div>
+    <div class="summary-value" id="license">
+      <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank">https://creativecommons.org/licenses/by-nc-sa/4.0/</a>
+    </div>
+  </div>
+  <div class="summary-row">
+    <div class="summary-label">Terms of Use</div>
+    <div class="summary-value" id="terms-of-use">Attribution is required to the copyright holders and the authors. Any publications referencing this data or derived data products should cite the Related Publications below, as well as directly citing this data collection.</div>
+  </div>
+  <div class="summary-row">
+    <div class="summary-label">HL7 Confidentiality Level</div>
+    <div class="summary-value" id="confidentiality-level">
+      Unrestricted
+    </div>
+  </div>
+  <div class="summary-row">
+    <div class="summary-label">Keywords</div>
+    <div class="summary-value" id="keywords">
+ AI,
+      affinity purification,
+      AP-MS,
+      artificial intelligence,
+      breast cancer,
+      Bridge2AI,
+      cardiomyocyte,
+      CM4AI,
+      CRISPR/Cas9,
+      induced pluripotent stem cell,
+      iPSC,
+      KOLF2.1J,
+      machine learning,
+      mass spectroscopy,
+      MDA-MB-468,
+      neural progenitor cell,
+      NPC,
+      neuron,
+      paclitaxel,
+      perturb-seq,
+      perturbation sequencing,
+      protein-protein interaction,
+      protein localization,
+      single-cell RNA sequencing,
+      scRNAseq,
+      SEC-MS,
+      size exclusion chromatography,
+      subcellular imaging,
+      vorinostat,
+      Artificial intelligence,
+      Breast cancer,
+      CRISPR perturbation,
+      Cell maps,
+      IPSC,
+      Machine learning,
+      Mass spectroscopy,
+      Perturb-seq,
+      Protein-protein interaction,
+      cell maps     </div>
+  </div>
+  <div class="summary-row">
+    <div class="summary-label">Cite As</div>
+    <div class="summary-value" id="citation">Clark T; Parker J; Al Manir S; Axelsson U; Ballllosero Navarro F; Chinn B; Churas CP; Dailamy A; Doctor Y; Fall J; Forget A; Gao J; Hansen JN; Hu M; Johannesson A; Khaliq H; Lee YH; Lenkiewicz J; Levinson MA; Metallo C; Muralidharan M; Nourreddine S; Niestroy J; Obernier K; Pan E; Park, S; Polacco B; Pratt D; Qian G; Schaffer, LV; Sigaeva A; Thaker S; Zhang Y; Zhao, X; Bélisle-Pipon JC; Brandt C; Chen JY; Ding Y; Fodeh S; Krogan N; Lundberg E; Mali P; Payne-Foster P; Ratcliffe S; Ravitsky V; Sali A; Schulz W; Ideker T, 2025, "Cell Maps for Artificial Intelligence - June 2026 Data Release (Beta)", https://doi.org/10.18130/V3/HIGT4C , https://dataverse.lib.virginia.edu/, V1</div>
+  </div>
+
+  <div class="summary-row">
+    <div class="summary-label">Funding</div>
+    <div class="summary-value" id="funding">National Institutes of Health: 1OT2OD032742-01, R01HG012351, R01NS131560, U54CA274502, #S10 OD026929. Department of Defense: W81XWH-22-1-0401. CIRM training: EDUC4-12804. Dutch Research Council: NWO, 019.231EN.013. National Cancer Institute: P30CA023100</div>
+  </div>
+  <div class="summary-row">
+    <div class="summary-label">Completeness</div>
+    <div class="summary-value" id="completeness">These data are not yet in completed final form, and some datasets are under temporary pre-publication embargo. Protein-protein interaction (SEC-MS), protein localization (IF imaging), and CRISPRi perturbSeq data interrogate sets of proteins which incompletely overlap. Computed cell maps not included in this release.</div>
+  </div>
+  <div class="summary-row">
+    <div class="summary-label">Related Publications</div>
+    <div class="summary-value" id="related-publications">
+      <ul class="publications-list">
+        <li>Clark T, Parker J, Al Manir S, et al. (2024) Cell Maps for Artificial Intelligence: AI-Ready Maps of Human Cell Architecture from Disease-Relevant Cell Lines. bioRxiv 2024.05.21.589311; doi: https://doi.org/10.1101/2024.05.21.589311</li>
+        <li>Nourreddine S, et al. (2024) A Perturbation Cell Atlas of Human Induced Pluripotent Stem Cells. bioRxiv 2024.05.21.589311; doi: https://doi.org/10.1101/2024.11.03.621734</li>
+        <li>Qin, Y., Huttlin, E.L., Winsnes, C.F. et al. A multi-scale map of cell structure fusing protein images and interactions. Nature 600, 536–542 (2021). https://doi.org/10.1038/s41586-021-04115-9</li>
+        <li>Schaffer LV, Hu M, Qian G, et al. Multimodal cell maps as a foundation for structural and functional genomics. Nature [Internet]. 2025 Apr 9; Available from: https://www.nature.com/articles/s41586-025-08878-3</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="regulatory-section">
+    <h3>Human Subjects & Regulatory</h3>
+    <div class="regulatory-grid">
+      <div class="regulatory-item">
+        <span class="regulatory-label">Human Subjects Research:</span> None - data collected from commercially available cell lines
+      </div>
+      <div class="regulatory-item">
+        <span class="regulatory-label">De-identified Samples:</span> Yes
+      </div>
+      <div class="regulatory-item">
+        <span class="regulatory-label">FDA Regulated:</span> No
+      </div>
+      <div class="regulatory-item">
+        <span class="regulatory-label">IRB Protocol ID:</span> N/A
+      </div>
+    </div>
+
+    <div class="irb-detail">
+      <span class="regulatory-label">Institutional Review Board:</span>
+ N/A     </div>
+
+    <div class="regulatory-exemptions">
+      <span class="regulatory-label">Human Subjects Exemptions:</span>
+      <p>Exempt — research with commercially available de-identified human cell lines does not constitute human subjects research.</p>
+    </div>
+  </div>
+</div></div>
+
+      <div id="ai-readiness"><div class="section-header">
+  <h2>AI Ready Details</h2>
+</div>
+<div class="use-cases-section">
+  <div class="use-cases-item">
+    <div class="use-cases-label">Intended Uses:</div>
+    <div class="use-cases-value">AI-ready datasets to support research in functional genomics, AI/machine learning model training, cellular process analysis, cell architectural changes, and interactions in presence of specific disease processes, treatment conditions, or genetic perturbations. A major goal is to enable biologically-driven, interpretable ML applications, for example as proposed in Ma et al. 2018 (PMID: 29505029) and Kuenzi et al. 2020 (PMID: 33096023).</div>
+  </div>
+  <div class="use-cases-item">
+    <div class="use-cases-label">Limitations:</div>
+    <div class="use-cases-value">This is an interim release. It does not contain predicted cell maps, which will be added in future releases. The current release is most suitable for bioinformatics analysis of the individual datasets. Requires domain expertise for meaningful analysis.</div>
+  </div>
+  <div class="use-cases-item">
+    <div class="use-cases-label">Prohibited Uses:</div>
+    <div class="use-cases-value">These laboratory data are not to be used in clinical decision-making or in any context involving patient care without appropriate regulatory oversight and approval.</div>
+  </div>
+  <div class="use-cases-item">
+    <div class="use-cases-label">Potential Sources of Bias:</div>
+    <div class="use-cases-value">Data in this release was derived from commercially available de-identified human cell lines, and does not represent all biological variants which may be seen in the population at large.</div>
+  </div>
+  <div class="use-cases-item">
+    <div class="use-cases-label">Maintenance Plan:</div>
+    <div class="use-cases-value">Dataset will be regularly updated and augmented on a quarterly basis through the end of the project (November, 2026). Long term preservation in the https://dataverse.lib.virginia.edu/, supported by committed institutional funds.</div>
+  </div>
+  <div class="use-cases-item">
+    <div class="use-cases-label">Data Collection:</div>
+    <div class="use-cases-value">Data collection processes are generally described in Clark T et al. (2024) "Cell Maps for Artificial Intelligence: AI-Ready Maps of Human Cell Architecture from Disease-Relevant Cell Lines" bioRxiv 2024.05.21.589311; doi: https://doi.org/10.1101/2024.05.21.589311. Additional data collection details will be subsequently published once finalized. </div>
+  </div>
+  <div class="use-cases-item">
+    <div class="use-cases-label">Data Collection Type:</div>
+    <div class="use-cases-value">Perturb-seq; IF imaging; SEC-MS; AP-MS</div>
+  </div>
+  <div class="use-cases-item">
+    <div class="use-cases-label">Missing Data:</div>
+    <div class="use-cases-value">Some datasets are under temporary pre-publication embargo. Protein-protein interaction (SEC-MS), protein localization (IF imaging), and CRISPRi perturbSeq data interrogate sets of proteins which incompletely overlap. Computed cell maps not included in this release.</div>
+  </div>
+  <div class="use-cases-item">
+    <div class="use-cases-label">Collection Timeframe:</div>
+    <div class="use-cases-value">9/1/2022- 6/1/2026</div>
+  </div>
+</div></div>
+
+      <div id="composition" class="section-header">
+        <h2>Composition (Datasets 9)</h2>
+      </div>
+
+      <div class="subcrates-container">
+   <div class="subcrate-summary" id="subcrate-1">
+    <h3 class="subcrate-title">EndoTag AP-MS Profiling of Chromatin Modifier Interactome Rewiring in MDA-MB-468 Cells Upon Paclitaxel Perturbation</h3>
+    <div class="subcrate-metadata">
+      <div class="metadata-item">
+        <span class="metadata-label">ROCrate ID:</span>
+        <span class="metadata-value">
+          <a href="https://fairscape.net/view/ark:59853/rocrate-endotag-ap-ms-in-mda-mb-468-cells-paclitaxel"
+            >ark:59853/rocrate-endotag-ap-ms-in-mda-mb-468-cells-paclitaxel</a
+          >
+        </span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Provenance ID:</span>
+        <span class="metadata-value">
+          <a href="AP-MS/apms-paclitaxel-rocrate/ro-crate-prov-graph.html">AP-MS/apms-paclitaxel-rocrate/ro-crate-prov-graph.html</a>
+        </span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Description:</span>
+        <span class="metadata-value">This submission comprises affinity purification mass spectrometry (AP-MS) raw data generated from endogenously tagged MDA-MB-468 cells under Paclitaxel perturbation. The dataset focuses on drug-induced interactome rewiring of chromatin modifiers relevant to the triple-negative breast cancer context. All AP-MS experiments were performed in four biological replicates. Each AP-MS batch includes an untagged parental control, 10 chromatin modifier tagged cell lines, and a positive control tagged line. DMSO-treated samples serve as vehicle control across all AP-MS experiments (Unpublished data).</span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Authors:</span>
+        <span class="metadata-value">Richa Tiwari</span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Date:</span>
+        <span class="metadata-value"
+          >2026-05-22T13:23:35.699025+00:00</span
+        >
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Size:</span>
+        <span class="metadata-value">441.2 GB</span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">DOI:</span>
+        <span class="metadata-value">
+          <a href="https://doi.org/https://doi.org/10.18130/V3/HIGT4C" target="_blank"
+            >https://doi.org/10.18130/V3/HIGT4C</a
+          >
+        </span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Contact:</span>
+        <span class="metadata-value">
+           <a href="mailto:tideker@health.ucsd.edu">tideker@health.ucsd.edu</a>
+         </span>
+      </div>
+ 
+      <div class="metadata-item">
+        <span class="metadata-label">Copyright:</span>
+        <span class="metadata-value">Copyright (c) 2026 The Regents of the University of California except where otherwise noted. Spatial proteomics raw image data is copyright (c) 2026 The Board of Trustees of the Leland Stanford Junior University.</span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">License:</span>
+        <span class="metadata-value">
+          <a href="https://creativecommons.org/publicdomain/zero/1.0/" target="_blank"
+            >https://creativecommons.org/publicdomain/zero/1.0/</a
+          >
+        </span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Terms of Use:</span>
+        <span class="metadata-value">
+ Attribution is required to the copyright holders and the authors. Any publications referencing this data or derived data products should cite the Related Publications below, as well as directly citing this data collection.         </span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Keywords:</span>
+        <span class="metadata-value">
+ proteomics, mass spectrometry, MassIVE, Endotagging, AP-MS, Triple Negative Breast Cancer, MDA-MB-468, Paclitaxel, CM4AI, Bridge2AI         </span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Funding:</span>
+        <span class="metadata-value">
+          </span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Related Publications:</span>
+        <span class="metadata-value">
+          <ul class="compact-list">
+            <li>
+ Clark T, Parker J, Al Manir S, et al. (2024) Cell Maps for Artificial Intelligence: AI-Ready Maps of Human Cell Architecture from Disease-Relevant Cell Lines. bioRxiv 2024.05.21.589311; doi: https://doi.org/10.1101/2024.05.21.589311             </li>
+            <li>
+ Nourreddine S, et al. (2024) A Perturbation Cell Atlas of Human Induced Pluripotent Stem Cells. bioRxiv 2024.05.21.589311; doi: https://doi.org/10.1101/2024.11.03.621734             </li>
+            <li>
+ Qin, Y., Huttlin, E.L., Winsnes, C.F. et al. A multi-scale map of cell structure fusing protein images and interactions. Nature 600, 536–542 (2021). https://doi.org/10.1038/s41586-021-04115-9             </li>
+            <li>
+ Schaffer LV, Hu M, Qian G, et al. Multimodal cell maps as a foundation for structural and functional genomics. Nature [Internet]. 2025 Apr 9; Available from: https://www.nature.com/articles/s41586-025-08878-3             </li>
+          </ul>
+        </span>
+      </div>
+    </div>
+
+    <div class="subcrate-composition">
+      <h4>Content Summary</h4>
+      <div class="compact-grid">
+        <div class="summary-card">
+          <div class="card-header">
+            <span class="card-icon">📊</span>
+            <span class="card-title">Files (556)</span>
+          </div>
+          <div class="card-content">
+            <div class="stat-row">
+              <span class="stat-label">Formats: </span>
+              <span class="stat-value"
+                >raw
+                (549), tsv
+                (2), pdf
+                (1), txt
+                (1), fasta
+                (1), xml
+                (1)</span
+              >
+            </div>
+             <div class="stat-row">
+              <span class="stat-label">Access: </span>
+              <span class="stat-value"
+                >No link
+                (1), Available
+                (555)</span
+              >
+            </div>
+          </div>
+        </div>
+
+        <div class="summary-card">
+          <div class="card-header">
+            <span class="card-icon">💻</span>
+            <span class="card-title"
+              >Software & Instruments (1)</span
+            >
+          </div>
+          <div class="card-content">
+            <div class="stat-row">
+              <span class="stat-label">Software: </span>
+              <span class="stat-value">0</span>
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">Instruments: </span>
+              <span class="stat-value">1</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="summary-card">
+          <div class="card-header">
+            <span class="card-icon">🧪</span>
+            <span class="card-title">Inputs (234)</span>
+          </div>
+          <div class="card-content">
+             <div class="stat-row">
+              <span class="stat-label">Derived From: </span>
+              <span class="stat-value"
+                >MDA-MB-468. Unknown.</span
+              >
+             </div>
+              <div class="stat-row">
+              <span class="stat-label">Datasets: </span>
+              <span class="stat-value"
+                >117</span
+              >
+            </div>
+            <div class="stat-row indent">
+              <span class="stat-value">
+Sample
+                <span class="small">(117)</span>              </span>
+            </div>
+          </div>
+        </div>
+        <div class="summary-card">
+          <div class="card-header">
+            <span class="card-icon">⚙️</span>
+            <span class="card-title">Other Components</span>
+          </div>
+          <div class="card-content">
+            <div class="stat-row">
+              <span class="stat-label">Experiments: </span>
+              <span class="stat-value">118</span>
+            </div>
+            <div class="stat-row indent">
+              <span class="stat-value small"
+                >AP-MS LFQ (118)</span
+              >
+            </div>
+             <div class="stat-row indent">
+              <span class="stat-value small"
+                >Sample → raw, Sample → fasta, pdf, raw, tsv, txt, xml</span
+              >
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">Computations: </span>
+              <span class="stat-value">0</span>
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">Schemas: </span>
+              <span class="stat-value">2</span>
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">Other: </span>
+              <span class="stat-value">59</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="view-full-link">
+      <a href="AP-MS/apms-paclitaxel-rocrate/ro-crate-preview.html">View Full Dataset Details</a>
+    </div>
+  </div>
+  <div class="subcrate-summary" id="subcrate-2">
+    <h3 class="subcrate-title">EndoTag-AP-MS Profiling of Chromatin Modifier Interactome Rewiring in MDA-MB-468 Cells Upon Vorinostat Perturbation</h3>
+    <div class="subcrate-metadata">
+      <div class="metadata-item">
+        <span class="metadata-label">ROCrate ID:</span>
+        <span class="metadata-value">
+          <a href="https://fairscape.net/view/ark:59853/rocrate-endotag-ap-ms-in-mda-mb-468-cells-vorinostat"
+            >ark:59853/rocrate-endotag-ap-ms-in-mda-mb-468-cells-vorinostat</a
+          >
+        </span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Provenance ID:</span>
+        <span class="metadata-value">
+          <a href="AP-MS/apms-vorinostat-rocrate/ro-crate-prov-graph.html">AP-MS/apms-vorinostat-rocrate/ro-crate-prov-graph.html</a>
+        </span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Description:</span>
+        <span class="metadata-value">This submission comprises affinity purification mass spectrometry (AP-MS) raw data generated from endogenously tagged MDA-MB-468 cells under Vorinostat perturbation. The dataset focuses on drug-induced interactome rewiring of chromatin modifiers relevant to the triple-negative breast cancer context. All AP-MS experiments were performed in four biological replicates. Each AP-MS batch includes an untagged parental control, 10 chromatin modifier tagged cell lines, and a positive control tagged line. DMSO-treated sample server as vehicle controls across all AP-MS experiments (Unpublished data).</span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Authors:</span>
+        <span class="metadata-value">Richa Tiwari</span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Date:</span>
+        <span class="metadata-value"
+          >2026-05-22T13:58:58.942348+00:00</span
+        >
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Size:</span>
+        <span class="metadata-value">532.5 GB</span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">DOI:</span>
+        <span class="metadata-value">
+          <a href="https://doi.org/https://doi.org/10.18130/V3/HIGT4C" target="_blank"
+            >https://doi.org/10.18130/V3/HIGT4C</a
+          >
+        </span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Contact:</span>
+        <span class="metadata-value">
+           <a href="mailto:tideker@health.ucsd.edu">tideker@health.ucsd.edu</a>
+         </span>
+      </div>
+ 
+      <div class="metadata-item">
+        <span class="metadata-label">Copyright:</span>
+        <span class="metadata-value">Copyright (c) 2026 The Regents of the University of California except where otherwise noted. Spatial proteomics raw image data is copyright (c) 2026 The Board of Trustees of the Leland Stanford Junior University.</span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">License:</span>
+        <span class="metadata-value">
+          <a href="https://creativecommons.org/publicdomain/zero/1.0/" target="_blank"
+            >https://creativecommons.org/publicdomain/zero/1.0/</a
+          >
+        </span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Terms of Use:</span>
+        <span class="metadata-value">
+ Attribution is required to the copyright holders and the authors. Any publications referencing this data or derived data products should cite the Related Publications below, as well as directly citing this data collection.         </span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Keywords:</span>
+        <span class="metadata-value">
+ proteomics, mass spectrometry, MassIVE, EndoTagging, AP-MS, Triple Negative Breast Cancer, MDA-MB-468, Vorinostat, CM4AI, Bridge2AI         </span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Funding:</span>
+        <span class="metadata-value">
+          </span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Related Publications:</span>
+        <span class="metadata-value">
+          <ul class="compact-list">
+            <li>
+ Clark T, Parker J, Al Manir S, et al. (2024) Cell Maps for Artificial Intelligence: AI-Ready Maps of Human Cell Architecture from Disease-Relevant Cell Lines. bioRxiv 2024.05.21.589311; doi: https://doi.org/10.1101/2024.05.21.589311             </li>
+            <li>
+ Nourreddine S, et al. (2024) A Perturbation Cell Atlas of Human Induced Pluripotent Stem Cells. bioRxiv 2024.05.21.589311; doi: https://doi.org/10.1101/2024.11.03.621734             </li>
+            <li>
+ Qin, Y., Huttlin, E.L., Winsnes, C.F. et al. A multi-scale map of cell structure fusing protein images and interactions. Nature 600, 536–542 (2021). https://doi.org/10.1038/s41586-021-04115-9             </li>
+            <li>
+ Schaffer LV, Hu M, Qian G, et al. Multimodal cell maps as a foundation for structural and functional genomics. Nature [Internet]. 2025 Apr 9; Available from: https://www.nature.com/articles/s41586-025-08878-3             </li>
+          </ul>
+        </span>
+      </div>
+    </div>
+
+    <div class="subcrate-composition">
+      <h4>Content Summary</h4>
+      <div class="compact-grid">
+        <div class="summary-card">
+          <div class="card-header">
+            <span class="card-icon">📊</span>
+            <span class="card-title">Files (719)</span>
+          </div>
+          <div class="card-content">
+            <div class="stat-row">
+              <span class="stat-label">Formats: </span>
+              <span class="stat-value"
+                >pdf
+                (1), txt
+                (1), fasta
+                (1), tsv
+                (2), xml
+                (1), raw
+                (712)</span
+              >
+            </div>
+             <div class="stat-row">
+              <span class="stat-label">Access: </span>
+              <span class="stat-value"
+                >No link
+                (1), Available
+                (718)</span
+              >
+            </div>
+          </div>
+        </div>
+
+        <div class="summary-card">
+          <div class="card-header">
+            <span class="card-icon">💻</span>
+            <span class="card-title"
+              >Software & Instruments (1)</span
+            >
+          </div>
+          <div class="card-content">
+            <div class="stat-row">
+              <span class="stat-label">Software: </span>
+              <span class="stat-value">0</span>
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">Instruments: </span>
+              <span class="stat-value">1</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="summary-card">
+          <div class="card-header">
+            <span class="card-icon">🧪</span>
+            <span class="card-title">Inputs (276)</span>
+          </div>
+          <div class="card-content">
+             <div class="stat-row">
+              <span class="stat-label">Derived From: </span>
+              <span class="stat-value"
+                >MDA-MB-468. Unknown.</span
+              >
+             </div>
+              <div class="stat-row">
+              <span class="stat-label">Datasets: </span>
+              <span class="stat-value"
+                >138</span
+              >
+            </div>
+            <div class="stat-row indent">
+              <span class="stat-value">
+Sample
+                <span class="small">(138)</span>              </span>
+            </div>
+          </div>
+        </div>
+        <div class="summary-card">
+          <div class="card-header">
+            <span class="card-icon">⚙️</span>
+            <span class="card-title">Other Components</span>
+          </div>
+          <div class="card-content">
+            <div class="stat-row">
+              <span class="stat-label">Experiments: </span>
+              <span class="stat-value">139</span>
+            </div>
+            <div class="stat-row indent">
+              <span class="stat-value small"
+                >AP-MS LFQ (139)</span
+              >
+            </div>
+             <div class="stat-row indent">
+              <span class="stat-value small"
+                >Sample → raw, Sample → fasta, pdf, tsv, txt, xml</span
+              >
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">Computations: </span>
+              <span class="stat-value">0</span>
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">Schemas: </span>
+              <span class="stat-value">2</span>
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">Other: </span>
+              <span class="stat-value">69</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="view-full-link">
+      <a href="AP-MS/apms-vorinostat-rocrate/ro-crate-preview.html">View Full Dataset Details</a>
+    </div>
+  </div>
+  <div class="subcrate-summary" id="subcrate-3">
+    <h3 class="subcrate-title">Paclitaxel IF Images</h3>
+    <div class="subcrate-metadata">
+      <div class="metadata-item">
+        <span class="metadata-label">ROCrate ID:</span>
+        <span class="metadata-value">
+          <a href="https://fairscape.net/view/ark:59853/rocrate-paclitaxel-if-data-release"
+            >ark:59853/rocrate-paclitaxel-if-data-release</a
+          >
+        </span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Provenance ID:</span>
+        <span class="metadata-value">
+          <a href="Images/paclitaxel/ro-crate-prov-graph.html">Images/paclitaxel/ro-crate-prov-graph.html</a>
+        </span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Description:</span>
+        <span class="metadata-value">This data set displays the spatial localization of 464 proteins of interest in cells of the breast cancer cell line MDA-MB-468 treated with paclitaxel as imaged by immunofluorescence-based staining (ICC-IF) and confocal microscopy in the Lundberg Lab at Stanford University, as part of the Cell Maps for Artificial Intelligence (CM4AI; CM4AI.org) project. Nuclei were stained with DAPI (blue channel); endoplasmic reticulum with a calreticulin antibody (yellow channel); microtubules with tubulin antibody (red channel); and antibody against protein of interest (green channel).</span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Authors:</span>
+        <span class="metadata-value">Hansen JN, Axelsson U, Johannesson A, Fall J, Ballllosera Navarro F, Lundberg E</span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Date:</span>
+        <span class="metadata-value"
+          >02/28/2025</span
+        >
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Size:</span>
+        <span class="metadata-value">2.6 GB</span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">DOI:</span>
+        <span class="metadata-value">
+          <a href="https://doi.org/https://doi.org/10.18130/V3/HIGT4C" target="_blank"
+            >https://doi.org/10.18130/V3/HIGT4C</a
+          >
+        </span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Contact:</span>
+        <span class="metadata-value">
+           <a href="mailto:emmalu@stanford.edu">emmalu@stanford.edu</a>
+         </span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">MD5:</span>
+        <span class="metadata-value">9422486c80bc9e1d35b2fbbc72a5f043</span>
+      </div>
+ 
+      <div class="metadata-item">
+        <span class="metadata-label">Copyright:</span>
+        <span class="metadata-value">Copyright (c) 2025 by The Board of Trustees of the Leland Stanford Junior University</span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">License:</span>
+        <span class="metadata-value">
+          <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/deed.en" target="_blank"
+            >https://creativecommons.org/licenses/by-nc-sa/4.0/deed.en</a
+          >
+        </span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Terms of Use:</span>
+        <span class="metadata-value">
+ Attribution is required to the copyright holders and the authors. Any publications referencing this data or derived products should cite the related article as well as directly citing this data collection.          </span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Keywords:</span>
+        <span class="metadata-value">
+ AI, artificial intelligence, breast cancer, cell maps, CM4AI, machine learning, MDA-MB-468, paclitaxel, protein localization         </span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Funding:</span>
+        <span class="metadata-value">
+ National Institutes of Health: 1OT2OD032742-01         </span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Related Publications:</span>
+        <span class="metadata-value">
+          <ul class="compact-list">
+            <li>
+ Clark T, Parker J, Al Manir S, et al. (2024) Cell Maps for Artificial Intelligence: AI-Ready Maps of Human Cell Architecture from Disease-Relevant Cell Lines. bioRxiv 2024.05.21.589311; doi: https://doi.org/10.1101/2024.05.21.589311             </li>
+            <li>
+ Nourreddine S, et al. (2024) A Perturbation Cell Atlas of Human Induced Pluripotent Stem Cells. bioRxiv 2024.05.21.589311; doi: https://doi.org/10.1101/2024.11.03.621734             </li>
+            <li>
+ Qin, Y., Huttlin, E.L., Winsnes, C.F. et al. A multi-scale map of cell structure fusing protein images and interactions. Nature 600, 536–542 (2021). https://doi.org/10.1038/s41586-021-04115-9             </li>
+            <li>
+ Schaffer LV, Hu M, Qian G, et al. Multimodal cell maps as a foundation for structural and functional genomics. Nature [Internet]. 2025 Apr 9; Available from: https://www.nature.com/articles/s41586-025-08878-3             </li>
+          </ul>
+        </span>
+      </div>
+    </div>
+
+    <div class="subcrate-composition">
+      <h4>Content Summary</h4>
+      <div class="compact-grid">
+        <div class="summary-card">
+          <div class="card-header">
+            <span class="card-icon">📊</span>
+            <span class="card-title">Files (17686)</span>
+          </div>
+          <div class="card-content">
+            <div class="stat-row">
+              <span class="stat-label">Formats: </span>
+              <span class="stat-value"
+                >csv
+                (1), image/jpeg
+                (17684)</span
+              >
+            </div>
+             <div class="stat-row">
+              <span class="stat-label">Access: </span>
+              <span class="stat-value"
+                >No link
+                (1), Available
+                (17685)</span
+              >
+            </div>
+          </div>
+        </div>
+
+        <div class="summary-card">
+          <div class="card-header">
+            <span class="card-icon">💻</span>
+            <span class="card-title"
+              >Software & Instruments (0)</span
+            >
+          </div>
+          <div class="card-content">
+          </div>
+        </div>
+
+        <div class="summary-card">
+          <div class="card-header">
+            <span class="card-icon">🧪</span>
+            <span class="card-title">Inputs (3)</span>
+          </div>
+          <div class="card-content">
+             <div class="stat-row">
+              <span class="stat-label">Derived From: </span>
+              <span class="stat-value"
+                >MDA-MB-468 Cell Line. Homo sapiens.</span
+              >
+             </div>
+              <div class="stat-row">
+              <span class="stat-label">Datasets: </span>
+              <span class="stat-value"
+                >2</span
+              >
+            </div>
+            <div class="stat-row indent">
+              <span class="stat-value">
+Sample
+                <span class="small">(1)</span>,
+csv
+                <span class="small">(1)</span>              </span>
+            </div>
+          </div>
+        </div>
+        <div class="summary-card">
+          <div class="card-header">
+            <span class="card-icon">⚙️</span>
+            <span class="card-title">Other Components</span>
+          </div>
+          <div class="card-content">
+            <div class="stat-row">
+              <span class="stat-label">Experiments: </span>
+              <span class="stat-value">468</span>
+            </div>
+            <div class="stat-row indent">
+              <span class="stat-value small"
+                >Immunofluorescence Imaging (468)</span
+              >
+            </div>
+             <div class="stat-row indent">
+              <span class="stat-value small"
+                >Sample → image/jpeg</span
+              >
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">Computations: </span>
+              <span class="stat-value">0</span>
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">Schemas: </span>
+              <span class="stat-value">1</span>
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">Other: </span>
+              <span class="stat-value">470</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="view-full-link">
+      <a href="Images/paclitaxel/ro-crate-preview.html">View Full Dataset Details</a>
+    </div>
+  </div>
+  <div class="subcrate-summary" id="subcrate-4">
+    <h3 class="subcrate-title">Untreated IF Images</h3>
+    <div class="subcrate-metadata">
+      <div class="metadata-item">
+        <span class="metadata-label">ROCrate ID:</span>
+        <span class="metadata-value">
+          <a href="https://fairscape.net/view/ark:59853/rocrate-untreated-if-data-release"
+            >ark:59853/rocrate-untreated-if-data-release</a
+          >
+        </span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Provenance ID:</span>
+        <span class="metadata-value">
+          <a href="Images/untreated/ro-crate-prov-graph.html">Images/untreated/ro-crate-prov-graph.html</a>
+        </span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Description:</span>
+        <span class="metadata-value">This data set displays the spatial localization of 464 proteins of interest in untreated cells of the breast cancer cell line MDA-MB-468 as imaged by immunofluorescence-based staining (ICC-IF) and confocal microscopy in the Lundberg Lab at Stanford University, as part of the Cell Maps for Artificial Intelligence (CM4AI; CM4AI.org) project. Nuclei were stained with DAPI (blue channel); endoplasmic reticulum with a calreticulin antibody (yellow channel); microtubules with tubulin antibody (red channel); and antibody against protein of interest (green channel).</span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Authors:</span>
+        <span class="metadata-value">Hansen JN, Axelsson U, Johannesson A, Fall J, Ballllosera Navarro F, Lundberg E</span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Date:</span>
+        <span class="metadata-value"
+          >02/28/2025</span
+        >
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Size:</span>
+        <span class="metadata-value">3.2 GB</span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">DOI:</span>
+        <span class="metadata-value">
+          <a href="https://doi.org/https://doi.org/10.18130/V3/HIGT4C" target="_blank"
+            >https://doi.org/10.18130/V3/HIGT4C</a
+          >
+        </span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Contact:</span>
+        <span class="metadata-value">
+           <a href="mailto:tideker@health.ucsd.edu">tideker@health.ucsd.edu</a>
+         </span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">MD5:</span>
+        <span class="metadata-value">0b4d129f5fbc3bb7f7ea564cd032cef7</span>
+      </div>
+ 
+      <div class="metadata-item">
+        <span class="metadata-label">Copyright:</span>
+        <span class="metadata-value">Copyright (c) 2025 by The Board of Trustees of the Leland Stanford Junior University</span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">License:</span>
+        <span class="metadata-value">
+          <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/deed.en" target="_blank"
+            >https://creativecommons.org/licenses/by-nc-sa/4.0/deed.en</a
+          >
+        </span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Terms of Use:</span>
+        <span class="metadata-value">
+ Attribution is required to the copyright holders and the authors. Any publications referencing this data or derived data products should cite the Related Publications below, as well as directly citing this data collection.         </span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Keywords:</span>
+        <span class="metadata-value">
+ artificial intelligence, breast cancer, cell maps, CM4AI, machine learning, MDA-MB-468, protein localization         </span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Funding:</span>
+        <span class="metadata-value">
+          </span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Related Publications:</span>
+        <span class="metadata-value">
+          <ul class="compact-list">
+            <li>
+ Clark T, Parker J, Al Manir S, et al. (2024) Cell Maps for Artificial Intelligence: AI-Ready Maps of Human Cell Architecture from Disease-Relevant Cell Lines. bioRxiv 2024.05.21.589311; doi: https://doi.org/10.1101/2024.05.21.589311             </li>
+            <li>
+ Nourreddine S, et al. (2024) A Perturbation Cell Atlas of Human Induced Pluripotent Stem Cells. bioRxiv 2024.05.21.589311; doi: https://doi.org/10.1101/2024.11.03.621734             </li>
+            <li>
+ Qin, Y., Huttlin, E.L., Winsnes, C.F. et al. A multi-scale map of cell structure fusing protein images and interactions. Nature 600, 536–542 (2021). https://doi.org/10.1038/s41586-021-04115-9             </li>
+            <li>
+ Schaffer LV, Hu M, Qian G, et al. Multimodal cell maps as a foundation for structural and functional genomics. Nature [Internet]. 2025 Apr 9; Available from: https://www.nature.com/articles/s41586-025-08878-3             </li>
+          </ul>
+        </span>
+      </div>
+    </div>
+
+    <div class="subcrate-composition">
+      <h4>Content Summary</h4>
+      <div class="compact-grid">
+        <div class="summary-card">
+          <div class="card-header">
+            <span class="card-icon">📊</span>
+            <span class="card-title">Files (15906)</span>
+          </div>
+          <div class="card-content">
+            <div class="stat-row">
+              <span class="stat-label">Formats: </span>
+              <span class="stat-value"
+                >csv
+                (1), image/jpeg
+                (15904)</span
+              >
+            </div>
+             <div class="stat-row">
+              <span class="stat-label">Access: </span>
+              <span class="stat-value"
+                >No link
+                (1), Available
+                (15905)</span
+              >
+            </div>
+          </div>
+        </div>
+
+        <div class="summary-card">
+          <div class="card-header">
+            <span class="card-icon">💻</span>
+            <span class="card-title"
+              >Software & Instruments (0)</span
+            >
+          </div>
+          <div class="card-content">
+          </div>
+        </div>
+
+        <div class="summary-card">
+          <div class="card-header">
+            <span class="card-icon">🧪</span>
+            <span class="card-title">Inputs (3)</span>
+          </div>
+          <div class="card-content">
+             <div class="stat-row">
+              <span class="stat-label">Derived From: </span>
+              <span class="stat-value"
+                >MDA-MB-468 Cell Line. Homo sapiens.</span
+              >
+             </div>
+              <div class="stat-row">
+              <span class="stat-label">Datasets: </span>
+              <span class="stat-value"
+                >2</span
+              >
+            </div>
+            <div class="stat-row indent">
+              <span class="stat-value">
+Sample
+                <span class="small">(1)</span>,
+csv
+                <span class="small">(1)</span>              </span>
+            </div>
+          </div>
+        </div>
+        <div class="summary-card">
+          <div class="card-header">
+            <span class="card-icon">⚙️</span>
+            <span class="card-title">Other Components</span>
+          </div>
+          <div class="card-content">
+            <div class="stat-row">
+              <span class="stat-label">Experiments: </span>
+              <span class="stat-value">468</span>
+            </div>
+            <div class="stat-row indent">
+              <span class="stat-value small"
+                >Immunofluorescence Imaging (468)</span
+              >
+            </div>
+             <div class="stat-row indent">
+              <span class="stat-value small"
+                >Sample → image/jpeg</span
+              >
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">Computations: </span>
+              <span class="stat-value">0</span>
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">Schemas: </span>
+              <span class="stat-value">1</span>
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">Other: </span>
+              <span class="stat-value">470</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="view-full-link">
+      <a href="Images/untreated/ro-crate-preview.html">View Full Dataset Details</a>
+    </div>
+  </div>
+  <div class="subcrate-summary" id="subcrate-5">
+    <h3 class="subcrate-title">Vorinostat IF Images</h3>
+    <div class="subcrate-metadata">
+      <div class="metadata-item">
+        <span class="metadata-label">ROCrate ID:</span>
+        <span class="metadata-value">
+          <a href="https://fairscape.net/view/ark:59853/rocrate-vorinostat-if-data-release"
+            >ark:59853/rocrate-vorinostat-if-data-release</a
+          >
+        </span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Provenance ID:</span>
+        <span class="metadata-value">
+          <a href="Images/vorinostat/ro-crate-prov-graph.html">Images/vorinostat/ro-crate-prov-graph.html</a>
+        </span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Description:</span>
+        <span class="metadata-value">This data set displays the spatial localization of 464 proteins of interest in cells of the breast cancer cell line MDA-MB-468 treated with vorinostat as imaged by immunofluorescence-based staining (ICC-IF) and confocal microscopy in the Lundberg Lab at Stanford University, as part of the Cell Maps for Artificial Intelligence (CM4AI; CM4AI.org) project. Nuclei were stained with DAPI (blue channel); endoplasmic reticulum with a calreticulin antibody (yellow channel); microtubules with tubulin antibody (red channel); and antibody against protein of interest (green channel).</span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Authors:</span>
+        <span class="metadata-value">Hansen JN, Axelsson U, Johannesson A, Fall J, Ballllosera Navarro F, Lundberg E</span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Date:</span>
+        <span class="metadata-value"
+          >02/28/2025</span
+        >
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Size:</span>
+        <span class="metadata-value">2.8 GB</span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">DOI:</span>
+        <span class="metadata-value">
+          <a href="https://doi.org/https://doi.org/10.18130/V3/HIGT4C" target="_blank"
+            >https://doi.org/10.18130/V3/HIGT4C</a
+          >
+        </span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Contact:</span>
+        <span class="metadata-value">
+           <a href="mailto:emmalu@stanford.edu">emmalu@stanford.edu</a>
+         </span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">MD5:</span>
+        <span class="metadata-value">ac577109a41a9806978461157b777d52</span>
+      </div>
+ 
+      <div class="metadata-item">
+        <span class="metadata-label">Copyright:</span>
+        <span class="metadata-value">Copyright (c) 2025 by The Board of Trustees of the Leland Stanford Junior University</span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">License:</span>
+        <span class="metadata-value">
+          <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/deed.en" target="_blank"
+            >https://creativecommons.org/licenses/by-nc-sa/4.0/deed.en</a
+          >
+        </span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Terms of Use:</span>
+        <span class="metadata-value">
+ Attribution is required to the copyright holders and the authors. Any publications referencing this data or derived products should cite the related article as well as directly citing this data collection.          </span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Keywords:</span>
+        <span class="metadata-value">
+ AI, artificial intelligence, breast cancer, cell maps, CM4AI, machine learning, MDA-MB-468, protein localization, vorinostat         </span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Funding:</span>
+        <span class="metadata-value">
+ National Institutes of Health: 1OT2OD032742-01         </span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Related Publications:</span>
+        <span class="metadata-value">
+          <ul class="compact-list">
+            <li>
+ Clark T, Parker J, Al Manir S, et al. (2024) Cell Maps for Artificial Intelligence: AI-Ready Maps of Human Cell Architecture from Disease-Relevant Cell Lines. bioRxiv 2024.05.21.589311; doi: https://doi.org/10.1101/2024.05.21.589311             </li>
+            <li>
+ Nourreddine S, et al. (2024) A Perturbation Cell Atlas of Human Induced Pluripotent Stem Cells. bioRxiv 2024.05.21.589311; doi: https://doi.org/10.1101/2024.11.03.621734             </li>
+            <li>
+ Qin, Y., Huttlin, E.L., Winsnes, C.F. et al. A multi-scale map of cell structure fusing protein images and interactions. Nature 600, 536–542 (2021). https://doi.org/10.1038/s41586-021-04115-9             </li>
+            <li>
+ Schaffer LV, Hu M, Qian G, et al. Multimodal cell maps as a foundation for structural and functional genomics. Nature [Internet]. 2025 Apr 9; Available from: https://www.nature.com/articles/s41586-025-08878-3             </li>
+          </ul>
+        </span>
+      </div>
+    </div>
+
+    <div class="subcrate-composition">
+      <h4>Content Summary</h4>
+      <div class="compact-grid">
+        <div class="summary-card">
+          <div class="card-header">
+            <span class="card-icon">📊</span>
+            <span class="card-title">Files (17850)</span>
+          </div>
+          <div class="card-content">
+            <div class="stat-row">
+              <span class="stat-label">Formats: </span>
+              <span class="stat-value"
+                >csv
+                (1), image/jpeg
+                (17848)</span
+              >
+            </div>
+             <div class="stat-row">
+              <span class="stat-label">Access: </span>
+              <span class="stat-value"
+                >No link
+                (1), Available
+                (17849)</span
+              >
+            </div>
+          </div>
+        </div>
+
+        <div class="summary-card">
+          <div class="card-header">
+            <span class="card-icon">💻</span>
+            <span class="card-title"
+              >Software & Instruments (0)</span
+            >
+          </div>
+          <div class="card-content">
+          </div>
+        </div>
+
+        <div class="summary-card">
+          <div class="card-header">
+            <span class="card-icon">🧪</span>
+            <span class="card-title">Inputs (3)</span>
+          </div>
+          <div class="card-content">
+             <div class="stat-row">
+              <span class="stat-label">Derived From: </span>
+              <span class="stat-value"
+                >MDA-MB-468 Cell Line. Homo sapiens.</span
+              >
+             </div>
+              <div class="stat-row">
+              <span class="stat-label">Datasets: </span>
+              <span class="stat-value"
+                >2</span
+              >
+            </div>
+            <div class="stat-row indent">
+              <span class="stat-value">
+Sample
+                <span class="small">(1)</span>,
+csv
+                <span class="small">(1)</span>              </span>
+            </div>
+          </div>
+        </div>
+        <div class="summary-card">
+          <div class="card-header">
+            <span class="card-icon">⚙️</span>
+            <span class="card-title">Other Components</span>
+          </div>
+          <div class="card-content">
+            <div class="stat-row">
+              <span class="stat-label">Experiments: </span>
+              <span class="stat-value">468</span>
+            </div>
+            <div class="stat-row indent">
+              <span class="stat-value small"
+                >Immunofluorescence Imaging (468)</span
+              >
+            </div>
+             <div class="stat-row indent">
+              <span class="stat-value small"
+                >Sample → image/jpeg</span
+              >
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">Computations: </span>
+              <span class="stat-value">0</span>
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">Schemas: </span>
+              <span class="stat-value">1</span>
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">Other: </span>
+              <span class="stat-value">470</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="view-full-link">
+      <a href="Images/vorinostat/ro-crate-preview.html">View Full Dataset Details</a>
+    </div>
+  </div>
+  <div class="subcrate-summary" id="subcrate-6">
+    <h3 class="subcrate-title">SEC-MS characterization of KOLF2 neuronal and cardiomyocyte differentiation</h3>
+    <div class="subcrate-metadata">
+      <div class="metadata-item">
+        <span class="metadata-label">ROCrate ID:</span>
+        <span class="metadata-value">
+          <a href="https://fairscape.net/view/ark:59853/rocrate-sec-ms-characterization-of-kolf2-neuronal-and-cardiomyocyte-differentiation-cm4ai-yjftt2oec6c"
+            >ark:59853/rocrate-sec-ms-characterization-of-kolf2-neuronal-and-cardiomyocyte-differentiation-cm4ai-yjftt2oec6c</a
+          >
+        </span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Provenance ID:</span>
+        <span class="metadata-value">
+          <a href="mass-spec/iPSCs/ro-crate-prov-graph.html">mass-spec/iPSCs/ro-crate-prov-graph.html</a>
+        </span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Description:</span>
+        <span class="metadata-value">This dataset contains mass spectrometry-based proteomics data investigating the protein-protein interaction networks during the differentiation of KOLF2.1J human induced pluripotent stem cells (iPSCs). We employed Size Exclusion Chromatography coupled with Mass Spectrometry (SEC-MS) to map multiscale biological organization across three distinct stages:  Parental: Undifferentiated iPSCs.  NPC: Neural Progenitor Cells.  Neurons: Terminally differentiated neurons.  Cardio: Terminally differentiated Cardiomyocyte.  The study aims to identify how protein complexes and networks are reorganized during neuronal lineage commitment and cardiomycyte differentiation. Data was acquired on a Bruker timsTOF platform, and quantitative analysis was performed using Spectronaut.  Experimental Design:  Sample Groups: Parental (Reps 1-4), NPC (Reps 1-2), Neuron (Reps 1-3), and Cardio (Reps 1-2).  Modality: SEC-MS for protein correlation profiling.  Data Processing: Raw data was processed using Spectronaut; downstream analysis was conducted in R using MSstats-compatible formats.</span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Authors:</span>
+        <span class="metadata-value">Antoine Forget</span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Date:</span>
+        <span class="metadata-value"
+          >2026-05-27T20:36:55.634084+00:00</span
+        >
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Size:</span>
+        <span class="metadata-value">1.11 TB</span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">DOI:</span>
+        <span class="metadata-value">
+          <a href="https://doi.org/https://doi.org/10.18130/V3/HIGT4C" target="_blank"
+            >https://doi.org/10.18130/V3/HIGT4C</a
+          >
+        </span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Contact:</span>
+        <span class="metadata-value">
+           <a href="mailto:tideker@health.ucsd.edu">tideker@health.ucsd.edu</a>
+         </span>
+      </div>
+ 
+      <div class="metadata-item">
+        <span class="metadata-label">Copyright:</span>
+        <span class="metadata-value">Copyright (c) 2026 The Regents of the University of California except where otherwise noted. Spatial proteomics raw image data is copyright (c) 2026 The Board of Trustees of the Leland Stanford Junior University.</span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">License:</span>
+        <span class="metadata-value">
+          <a href="https://creativecommons.org/publicdomain/zero/1.0/" target="_blank"
+            >https://creativecommons.org/publicdomain/zero/1.0/</a
+          >
+        </span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Terms of Use:</span>
+        <span class="metadata-value">
+ Attribution is required to the copyright holders and the authors. Any publications referencing this data or derived data products should cite the Related Publications below, as well as directly citing this data collection.         </span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Keywords:</span>
+        <span class="metadata-value">
+ proteomics, mass spectrometry, MassIVE, SEC-MS, iPSC, KOLF2.1J, KOLF2, IPSC, Neuron, Cardiomyocyte         </span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Funding:</span>
+        <span class="metadata-value">
+          </span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Related Publications:</span>
+        <span class="metadata-value">
+          <ul class="compact-list">
+            <li>
+ Clark T, Parker J, Al Manir S, et al. (2024) Cell Maps for Artificial Intelligence: AI-Ready Maps of Human Cell Architecture from Disease-Relevant Cell Lines. bioRxiv 2024.05.21.589311; doi: https://doi.org/10.1101/2024.05.21.589311             </li>
+            <li>
+ Nourreddine S, et al. (2024) A Perturbation Cell Atlas of Human Induced Pluripotent Stem Cells. bioRxiv 2024.05.21.589311; doi: https://doi.org/10.1101/2024.11.03.621734             </li>
+            <li>
+ Qin, Y., Huttlin, E.L., Winsnes, C.F. et al. A multi-scale map of cell structure fusing protein images and interactions. Nature 600, 536–542 (2021). https://doi.org/10.1038/s41586-021-04115-9             </li>
+            <li>
+ Schaffer LV, Hu M, Qian G, et al. Multimodal cell maps as a foundation for structural and functional genomics. Nature [Internet]. 2025 Apr 9; Available from: https://www.nature.com/articles/s41586-025-08878-3             </li>
+          </ul>
+        </span>
+      </div>
+    </div>
+
+    <div class="subcrate-composition">
+      <h4>Content Summary</h4>
+      <div class="compact-grid">
+        <div class="summary-card">
+          <div class="card-header">
+            <span class="card-icon">📊</span>
+            <span class="card-title">Files (863)</span>
+          </div>
+          <div class="card-content">
+            <div class="stat-row">
+              <span class="stat-label">Formats: </span>
+              <span class="stat-value"
+                >csv
+                (1), xml
+                (1), tsv
+                (1), Bruker .d
+                (859)</span
+              >
+            </div>
+             <div class="stat-row">
+              <span class="stat-label">Access: </span>
+              <span class="stat-value"
+                >No link
+                (1), Available
+                (862)</span
+              >
+            </div>
+          </div>
+        </div>
+
+        <div class="summary-card">
+          <div class="card-header">
+            <span class="card-icon">💻</span>
+            <span class="card-title"
+              >Software & Instruments (3)</span
+            >
+          </div>
+          <div class="card-content">
+            <div class="stat-row">
+              <span class="stat-label">Software: </span>
+              <span class="stat-value">2</span>
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">Instruments: </span>
+              <span class="stat-value">1</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="summary-card">
+          <div class="card-header">
+            <span class="card-icon">🧪</span>
+            <span class="card-title">Inputs (2)</span>
+          </div>
+          <div class="card-content">
+             <div class="stat-row">
+              <span class="stat-label">Derived From: </span>
+              <span class="stat-value"
+                >KOLF2.1J Cell Line. Homo sapiens.</span
+              >
+             </div>
+              <div class="stat-row">
+              <span class="stat-label">Datasets: </span>
+              <span class="stat-value"
+                >1</span
+              >
+            </div>
+            <div class="stat-row indent">
+              <span class="stat-value">
+Sample
+                <span class="small">(1)</span>              </span>
+            </div>
+          </div>
+        </div>
+        <div class="summary-card">
+          <div class="card-header">
+            <span class="card-icon">⚙️</span>
+            <span class="card-title">Other Components</span>
+          </div>
+          <div class="card-content">
+            <div class="stat-row">
+              <span class="stat-label">Experiments: </span>
+              <span class="stat-value">12</span>
+            </div>
+            <div class="stat-row indent">
+              <span class="stat-value small"
+                >SEC-MS (11), SEC-MS library acquisition (1)</span
+              >
+            </div>
+             <div class="stat-row indent">
+              <span class="stat-value small"
+                >Sample → Bruker .d</span
+              >
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">Computations: </span>
+              <span class="stat-value">2</span>
+            </div>
+            <div class="stat-row indent">
+              <span class="stat-value small"
+                >tsv → csv, Bruker .d → tsv, xml</span
+              >
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">Schemas: </span>
+              <span class="stat-value">2</span>
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">Other: </span>
+              <span class="stat-value">1</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="view-full-link">
+      <a href="mass-spec/iPSCs/ro-crate-preview.html">View Full Dataset Details</a>
+    </div>
+  </div>
+  <div class="subcrate-summary" id="subcrate-7">
+    <h3 class="subcrate-title">SEC-MS of MDA-MB468 following treatment of vorinostat or paclitaxel.</h3>
+    <div class="subcrate-metadata">
+      <div class="metadata-item">
+        <span class="metadata-label">ROCrate ID:</span>
+        <span class="metadata-value">
+          <a href="https://fairscape.net/view/ark:59853/rocrate-data-from-treated-human-cancer-cells-jan-26"
+            >ark:59853/rocrate-data-from-treated-human-cancer-cells-jan-26</a
+          >
+        </span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Provenance ID:</span>
+        <span class="metadata-value">
+          <a href="mass-spec/cancer-cells/ro-crate-prov-graph.html">mass-spec/cancer-cells/ro-crate-prov-graph.html</a>
+        </span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Description:</span>
+        <span class="metadata-value">This dataset was generated by size exclusion chromatography-mass spectroscopy (SEC-MS) following the treatment of vorinostat or paclitaxel on MDA-MB468 human breast cancer cells, in the Nevan Krogan laboratory at the University of California San Francisco, as part of the Cell Maps for Artificial Intelligence (CM4AI; CM4AI.org) Functional Genomics Grand Challenge, a component of the U.S. National Institute of Health's (NIH) Bridge2AI program.</span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Authors:</span>
+        <span class="metadata-value">Forget A, Obernier K, Krogan N</span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Date:</span>
+        <span class="metadata-value"
+          >Not specified</span
+        >
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Size:</span>
+        <span class="metadata-value">910 GB</span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">DOI:</span>
+        <span class="metadata-value">
+          <a href="https://doi.org/https://doi.org/doi:10.25345/C5348GV4S" target="_blank"
+            >https://doi.org/doi:10.25345/C5348GV4S</a
+          >
+        </span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Contact:</span>
+        <span class="metadata-value">
+           <a href="mailto:nevan.krogan@ucsf.edu">nevan.krogan@ucsf.edu</a>
+         </span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">MD5:</span>
+        <span class="metadata-value">cb67e7749b15ce87b9042a9feba9d032</span>
+      </div>
+ 
+      <div class="metadata-item">
+        <span class="metadata-label">Copyright:</span>
+        <span class="metadata-value">Copyright (c) 2026 by The Regents of the University of California</span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">License:</span>
+        <span class="metadata-value">
+          <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/deed.en" target="_blank"
+            >https://creativecommons.org/licenses/by-nc-sa/4.0/deed.en</a
+          >
+        </span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Terms of Use:</span>
+        <span class="metadata-value">
+ Attribution is required to the copyright holders and the authors. Any publications referencing this data or derived products should cite the related article as well as directly citing this data collection.         </span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Keywords:</span>
+        <span class="metadata-value">
+ AI, Artificial intelligence, Breast cancer, Cell maps, CM4AI, IPSC, KOLF2.1J, Machine learning, Mass spectroscopy, Protein-protein interaction, SEC-MS, vorinostat, paclitaxel         </span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Funding:</span>
+        <span class="metadata-value">
+ National Institutes of Health: 1OT2OD032742-01         </span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Related Publications:</span>
+        <span class="metadata-value">
+          <ul class="compact-list">
+            <li>
+              <a href="http://doi.org/10.1101/2024.05.21.589311" target="_blank">http://doi.org/10.1101/2024.05.21.589311</a>
+            </li>
+          </ul>
+        </span>
+      </div>
+    </div>
+
+    <div class="subcrate-composition">
+      <h4>Content Summary</h4>
+      <div class="compact-grid">
+        <div class="summary-card">
+          <div class="card-header">
+            <span class="card-icon">📊</span>
+            <span class="card-title">Files (19)</span>
+          </div>
+          <div class="card-content">
+            <div class="stat-row">
+              <span class="stat-label">Formats: </span>
+              <span class="stat-value"
+                >Bruker .d
+                (9), TSV
+                (9)</span
+              >
+            </div>
+             <div class="stat-row">
+              <span class="stat-label">Access: </span>
+              <span class="stat-value"
+                >Available
+                (19)</span
+              >
+            </div>
+          </div>
+        </div>
+
+        <div class="summary-card">
+          <div class="card-header">
+            <span class="card-icon">💻</span>
+            <span class="card-title"
+              >Software & Instruments (2)</span
+            >
+          </div>
+          <div class="card-content">
+            <div class="stat-row">
+              <span class="stat-label">Software: </span>
+              <span class="stat-value">1</span>
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">Instruments: </span>
+              <span class="stat-value">1</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="summary-card">
+          <div class="card-header">
+            <span class="card-icon">🧪</span>
+            <span class="card-title">Inputs (2)</span>
+          </div>
+          <div class="card-content">
+             <div class="stat-row">
+              <span class="stat-label">Derived From: </span>
+              <span class="stat-value"
+                >MDA-MB-468 Cell Line. Homo sapiens.</span
+              >
+             </div>
+              <div class="stat-row">
+              <span class="stat-label">Datasets: </span>
+              <span class="stat-value"
+                >1</span
+              >
+            </div>
+            <div class="stat-row indent">
+              <span class="stat-value">
+Sample
+                <span class="small">(1)</span>              </span>
+            </div>
+          </div>
+        </div>
+        <div class="summary-card">
+          <div class="card-header">
+            <span class="card-icon">⚙️</span>
+            <span class="card-title">Other Components</span>
+          </div>
+          <div class="card-content">
+            <div class="stat-row">
+              <span class="stat-label">Experiments: </span>
+              <span class="stat-value">9</span>
+            </div>
+            <div class="stat-row indent">
+              <span class="stat-value small"
+                >Size Exclusion Chromatography-Mass Spectrometry (9)</span
+              >
+            </div>
+             <div class="stat-row indent">
+              <span class="stat-value small"
+                >Sample → Bruker .d</span
+              >
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">Computations: </span>
+              <span class="stat-value">9</span>
+            </div>
+            <div class="stat-row indent">
+              <span class="stat-value small"
+                >Bruker .d → TSV</span
+              >
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">Schemas: </span>
+              <span class="stat-value">9</span>
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">Other: </span>
+              <span class="stat-value">4</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="view-full-link">
+      <a href="mass-spec/cancer-cells/ro-crate-preview.html">View Full Dataset Details</a>
+    </div>
+  </div>
+  <div class="subcrate-summary" id="subcrate-8">
+    <h3 class="subcrate-title">Perturbation Cell Atlas of Human Induced Pluripotent Stem Cells - Raw Sequence Data</h3>
+    <div class="subcrate-metadata">
+      <div class="metadata-item">
+        <span class="metadata-label">ROCrate ID:</span>
+        <span class="metadata-value">
+          <a href="https://fairscape.net/view/ark:59853/rocrate-sra-data-for-perturbation-cell-atlas-58RmCGMQBj"
+            >ark:59853/rocrate-sra-data-for-perturbation-cell-atlas-58RmCGMQBj</a
+          >
+        </span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Provenance ID:</span>
+        <span class="metadata-value">
+          <a href="Perturb-Seq/sra/ro-crate-prov-graph.html">Perturb-Seq/sra/ro-crate-prov-graph.html</a>
+        </span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Description:</span>
+        <span class="metadata-value">This dataset represents raw sequence data from an expressed genome-scale CRISPRi Perturbation Cell Atlas in KOLF2.1J human induced pluripotent stem cells (hiPSCs) mapping transcriptional and fitness phenotypes associated with 11,739 targeted genes, as part of the Cell Maps for Artificial Intelligence (CM4AI; CM4AI.org) Functional Genomics Grand Challenge, a component of the U.S. National Institute of Health's (NIH) Bridge2AI program.</span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Authors:</span>
+        <span class="metadata-value">Doctor Y; Dailamy A; Forget A; Lee YH; Chinn B; Khaliq H; Polacco B; Muralidharan, M; Pan E; Zhang Y; Sigaeva A; Hansen JN; Gao J; Parker JA; Obernier K; Clark T; Chen JY; Metallo C; Lundberg E; Idkeker T; Krogan N; Mali P</span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Date:</span>
+        <span class="metadata-value"
+          >Not specified</span
+        >
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Size:</span>
+        <span class="metadata-value">16.7TB</span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">DOI:</span>
+        <span class="metadata-value">
+          <a href="https://doi.org/https://doi.org/10.18130/V3/HIGT4C" target="_blank"
+            >https://doi.org/10.18130/V3/HIGT4C</a
+          >
+        </span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Contact:</span>
+        <span class="metadata-value">
+           <a href="mailto:pmali@ucsd.edu">pmali@ucsd.edu</a>
+         </span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">MD5:</span>
+        <span class="metadata-value">cbdb263b1c099396d75e16f00a79a818</span>
+      </div>
+ 
+      <div class="metadata-item">
+        <span class="metadata-label">Copyright:</span>
+        <span class="metadata-value">Copyright (c) 2024 by The Regents of the University of California</span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">License:</span>
+        <span class="metadata-value">
+          <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/deed.en" target="_blank"
+            >https://creativecommons.org/licenses/by-nc-sa/4.0/deed.en</a
+          >
+        </span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Terms of Use:</span>
+        <span class="metadata-value">
+ Attribution is required to the copyright holders and the authors. Any publications referencing this data or derived products should cite the related article as well as directly citing this data collection.         </span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Keywords:</span>
+        <span class="metadata-value">
+ AI, Artificial intelligence, Cell maps, CM4AI, CRISPR perturbation, IPSC, KOLF2.1J, Machine learning, Perturb-seq, scRNAseq, single-cell RNA sequencing         </span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Funding:</span>
+        <span class="metadata-value">
+ National Institutes of Health: 1OT2OD032742-01, R01HG012351, R01NS131560, U54CA274502, #S10 OD026929. Department of Defense: W81XWH-22-1-0401. CIRM training: EDUC4-12804. Dutch Research Council: NWO, 019.231EN.013. National Cancer Institute: P30CA023100         </span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Related Publications:</span>
+        <span class="metadata-value">
+          <ul class="compact-list">
+            <li>
+ Nourreddine S, Doctor Y, Dailamy A, et al. (2024) "A Perturbation Cell Atlas of Human Induced Pluripotent Stem Cells" bioRxiv 2024.11.03.621734; doi: https://doi.org/10.1101/2024.11.03.621734             </li>
+          </ul>
+        </span>
+      </div>
+    </div>
+
+    <div class="subcrate-composition">
+      <h4>Content Summary</h4>
+      <div class="compact-grid">
+        <div class="summary-card">
+          <div class="card-header">
+            <span class="card-icon">📊</span>
+            <span class="card-title">Files (284)</span>
+          </div>
+          <div class="card-content">
+            <div class="stat-row">
+              <span class="stat-label">Formats: </span>
+              <span class="stat-value"
+                >fastq.gz
+                (192), h5
+                (90), pdf
+                (1)</span
+              >
+            </div>
+             <div class="stat-row">
+              <span class="stat-label">Access: </span>
+              <span class="stat-value"
+                >No link
+                (1), Embargoed
+                (283)</span
+              >
+            </div>
+          </div>
+        </div>
+
+        <div class="summary-card">
+          <div class="card-header">
+            <span class="card-icon">💻</span>
+            <span class="card-title"
+              >Software & Instruments (3)</span
+            >
+          </div>
+          <div class="card-content">
+            <div class="stat-row">
+              <span class="stat-label">Software: </span>
+              <span class="stat-value">2</span>
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">Instruments: </span>
+              <span class="stat-value">1</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="summary-card">
+          <div class="card-header">
+            <span class="card-icon">🧪</span>
+            <span class="card-title">Inputs (384)</span>
+          </div>
+          <div class="card-content">
+             <div class="stat-row">
+              <span class="stat-label">Derived From: </span>
+              <span class="stat-value"
+                >KOLF2.1J Cell Line. Homo sapiens.</span
+              >
+             </div>
+              <div class="stat-row">
+              <span class="stat-label">Datasets: </span>
+              <span class="stat-value"
+                >192</span
+              >
+            </div>
+            <div class="stat-row indent">
+              <span class="stat-value">
+Sample
+                <span class="small">(192)</span>              </span>
+            </div>
+          </div>
+        </div>
+        <div class="summary-card">
+          <div class="card-header">
+            <span class="card-icon">⚙️</span>
+            <span class="card-title">Other Components</span>
+          </div>
+          <div class="card-content">
+            <div class="stat-row">
+              <span class="stat-label">Experiments: </span>
+              <span class="stat-value">192</span>
+            </div>
+            <div class="stat-row indent">
+              <span class="stat-value small"
+                >RNA-Seq (192)</span
+              >
+            </div>
+             <div class="stat-row indent">
+              <span class="stat-value small"
+                >Sample → fastq.gz</span
+              >
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">Computations: </span>
+              <span class="stat-value">90</span>
+            </div>
+            <div class="stat-row indent">
+              <span class="stat-value small"
+                >fastq.gz → h5</span
+              >
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">Schemas: </span>
+              <span class="stat-value">1</span>
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">Other: </span>
+              <span class="stat-value">1</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="view-full-link">
+      <a href="Perturb-Seq/sra/ro-crate-preview.html">View Full Dataset Details</a>
+    </div>
+  </div>
+  <div class="subcrate-summary" id="subcrate-9">
+    <h3 class="subcrate-title">Perturbation Cell Atlas of Human Induced Pluripotent Stem Cells - Perturb Seq</h3>
+    <div class="subcrate-metadata">
+      <div class="metadata-item">
+        <span class="metadata-label">ROCrate ID:</span>
+        <span class="metadata-value">
+          <a href="https://fairscape.net/view/ark:59853/rocrate-a-perturbation-cell-atlas-of-human-induced-pluripotent-stem-cells"
+            >ark:59853/rocrate-a-perturbation-cell-atlas-of-human-induced-pluripotent-stem-cells</a
+          >
+        </span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Provenance ID:</span>
+        <span class="metadata-value">
+          <a href="Perturb-Seq/cell-atlas/ro-crate-prov-graph.html">Perturb-Seq/cell-atlas/ro-crate-prov-graph.html</a>
+        </span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Description:</span>
+        <span class="metadata-value">This dataset represents an expressed genome-scale CRISPRi Perturbation Cell Atlas in KOLF2.1J human induced pluripotent stem cells (hiPSCs) mapping transcriptional and fitness phenotypes associated with 11,739 targeted genes, as part of the Cell Maps for Artificial Intelligence (CM4AI) Functional Genomics Grand Challenge, a component of the U.S. National Institute of Health's (NIH) Bridge2AI program. We validated these findings via phenotypic, protein-interaction, and metabolic tracing assays.</span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Authors:</span>
+        <span class="metadata-value">Doctor Y; Dailamy A; Forget A; Lee YH; Chinn B; Khaliq H; Polacco B; Muralidharan, M; Pan E; Zhang Y; Sigaeva A; Hansen JN; Gao J; Parker JA; Obernier K; Clark T; Chen JY; Metallo C; Lundberg E; Ideker T; Krogan N; Mali P</span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Date:</span>
+        <span class="metadata-value"
+          >Not specified</span
+        >
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Size:</span>
+        <span class="metadata-value">177.35 GB</span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">DOI:</span>
+        <span class="metadata-value">
+          <a href="https://doi.org/https://doi.org/10.18130/V3/HIGT4C" target="_blank"
+            >https://doi.org/10.18130/V3/HIGT4C</a
+          >
+        </span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Contact:</span>
+        <span class="metadata-value">
+           <a href="mailto:pmali@ucsd.edu">pmali@ucsd.edu</a>
+         </span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">MD5:</span>
+        <span class="metadata-value">1cafefa32a897998e3e2ba0a29a3ef5c</span>
+      </div>
+ 
+      <div class="metadata-item">
+        <span class="metadata-label">Copyright:</span>
+        <span class="metadata-value">Copyright (c) 2026 by The Regents of the University of California</span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">License:</span>
+        <span class="metadata-value">
+          <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/deed.en" target="_blank"
+            >https://creativecommons.org/licenses/by-nc-sa/4.0/deed.en</a
+          >
+        </span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Terms of Use:</span>
+        <span class="metadata-value">
+ Attribution is required to the copyright holders and the authors. Any publications referencing this data or derived products should cite the related article as well as directly citing this data collection.         </span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Keywords:</span>
+        <span class="metadata-value">
+ AI, Artificial intelligence, Cell maps, CM4AI, CRISPR perturbation, IPSC, KOLF2.1J, Machine learning, Perturb-seq, scRNAseq, single-cell RNA sequencing         </span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Funding:</span>
+        <span class="metadata-value">
+ National Institutes of Health: 1OT2OD032742-01, R01HG012351, R01NS131560, U54CA274502, #S10 OD026929. Department of Defense: W81XWH-22-1-0401. CIRM training: EDUC4-12804. Dutch Research Council: NWO, 019.231EN.013. National Cancer Institute: P30CA023100         </span>
+      </div>
+      <div class="metadata-item">
+        <span class="metadata-label">Related Publications:</span>
+        <span class="metadata-value">
+          <ul class="compact-list">
+            <li>
+ Nourreddine S, Doctor Y, Dailamy A, et al. (2024) "A Perturbation Cell Atlas of Human Induced Pluripotent Stem Cells" bioRxiv 2024.11.03.621734; doi: https://doi.org/10.1101/2024.11.03.621734             </li>
+          </ul>
+        </span>
+      </div>
+    </div>
+
+    <div class="subcrate-composition">
+      <h4>Content Summary</h4>
+      <div class="compact-grid">
+        <div class="summary-card">
+          <div class="card-header">
+            <span class="card-icon">📊</span>
+            <span class="card-title">Files (3)</span>
+          </div>
+          <div class="card-content">
+            <div class="stat-row">
+              <span class="stat-label">Formats: </span>
+              <span class="stat-value"
+                >h5ad
+                (2)</span
+              >
+            </div>
+             <div class="stat-row">
+              <span class="stat-label">Access: </span>
+              <span class="stat-value"
+                >No link
+                (1), Available
+                (2)</span
+              >
+            </div>
+          </div>
+        </div>
+
+        <div class="summary-card">
+          <div class="card-header">
+            <span class="card-icon">💻</span>
+            <span class="card-title"
+              >Software & Instruments (1)</span
+            >
+          </div>
+          <div class="card-content">
+            <div class="stat-row">
+              <span class="stat-label">Software: </span>
+              <span class="stat-value">1</span>
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">Instruments: </span>
+              <span class="stat-value">0</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="summary-card">
+          <div class="card-header">
+            <span class="card-icon">🧪</span>
+            <span class="card-title">Inputs (90)</span>
+          </div>
+          <div class="card-content">
+             <div class="stat-row">
+              <span class="stat-label">Datasets: </span>
+              <span class="stat-value"
+                >90</span
+              >
+            </div>
+            <div class="stat-row indent">
+              <span class="stat-value">
+Perturbation Cell Atlas of Human Induced Pluripotent Stem Cells - Raw Sequence Data (h5)
+                <span class="small">(90)</span>              </span>
+            </div>
+          </div>
+        </div>
+        <div class="summary-card">
+          <div class="card-header">
+            <span class="card-icon">⚙️</span>
+            <span class="card-title">Other Components</span>
+          </div>
+          <div class="card-content">
+            <div class="stat-row">
+              <span class="stat-label">Experiments: </span>
+              <span class="stat-value">0</span>
+            </div>
+             <div class="stat-row">
+              <span class="stat-label">Computations: </span>
+              <span class="stat-value">1</span>
+            </div>
+            <div class="stat-row indent">
+              <span class="stat-value small"
+                >Perturbation Cell Atlas of Human Induced Pluripotent Stem Cells - Raw Sequence Data h5 → h5ad</span
+              >
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">Schemas: </span>
+              <span class="stat-value">1</span>
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">Other: </span>
+              <span class="stat-value">0</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="view-full-link">
+      <a href="Perturb-Seq/cell-atlas/ro-crate-preview.html">View Full Dataset Details</a>
+    </div>
+  </div>
+ </div> <div class="section-header">
+  <h2>Distribution Information</h2>
+</div>
+<div class="distribution-section">
+  <div class="distribution-item">
+    <div class="distribution-label">Publisher:</div>
+    <div class="distribution-value">https://dataverse.lib.virginia.edu/</div>
+  </div>
+    <div class="distribution-item">
+    <div class="distribution-label">License:</div>
+    <div class="distribution-value">
+      <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank">https://creativecommons.org/licenses/by-nc-sa/4.0/</a>
+    </div>
+  </div>
+    <div class="distribution-item">
+    <div class="distribution-label">Release Date:</div>
+    <div class="distribution-value">2026-06-30</div>
+  </div>
+   <div class="distribution-item">
+    <div class="distribution-label">Version:</div>
+    <div class="distribution-value">1.0</div>
+  </div>
+</div>
+    </div>
+    <footer>
+      Datasheet Provenance: This datasheet and associated metadata were
+      generated by the FAIRSCAPE AI-readiness platform (Al Manir, et al. 2024,
+      BioRXiv 2024.12.23.629818;
+      <a href="https://doi.org/10.1101/2024.12.23.629818" target="_blank"
+        >https://doi.org/10.1101/2024.12.23.629818</a
+      >).
+    </footer>
+
+    <script>
+      document.addEventListener("DOMContentLoaded", function () {
+        const toggleBtn = document.getElementById("sidebar-toggle");
+        const sidebar = document.getElementById("sidebar");
+        const body = document.body;
+
+        toggleBtn.addEventListener("click", function () {
+          sidebar.classList.toggle("active");
+          body.classList.toggle("sidebar-active");
+        });
+      });
+    </script>
+  </body>
+</html>
