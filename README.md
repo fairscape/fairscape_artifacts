@@ -59,7 +59,7 @@ contents on wide screens:
 * **AI-Ready Review** — every criterion with its estimate and basis.
 * **Composition** — for a release, a filterable "datasets at a glance" index
   and one collapsible card per constituent crate: its metadata, a content
-  summary (files by format and access, software and instruments, inputs by
+  summary (files by format and access, ML models, software and instruments, inputs by
   origin, experiments and computations as `inputs -> outputs` patterns), and
   links to its provenance graph, QC report and preview page. A crate with no
   constituents gets a single card for itself.

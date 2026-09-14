@@ -209,6 +209,7 @@ def details(crate: Crate, index, owner) -> Dict[str, Any]:
     provenance = 0
     file_formats: List[str] = []
     software_formats: List[str] = []
+    model_formats: List[str] = []
     file_access: List[str] = []
     software_access: List[str] = []
     computation_patterns: List[Dict[str, Any]] = []
@@ -230,6 +231,8 @@ def details(crate: Crate, index, owner) -> Dict[str, Any]:
         elif kind == "software":
             software_formats.extend(f.formats_of(node))
             software_access.append(f.access(node))
+        elif kind == "mlmodel":
+            model_formats.extend(f.formats_of(node))
         elif kind == "sample":
             line = _cell_line(node, index)
             if line:
@@ -252,6 +255,7 @@ def details(crate: Crate, index, owner) -> Dict[str, Any]:
 
     return {
         "files": counts["dataset"],
+        "models": counts["mlmodel"],
         "software": counts["software"],
         "instruments": counts["instrument"],
         "samples": counts["sample"],
@@ -263,6 +267,7 @@ def details(crate: Crate, index, owner) -> Dict[str, Any]:
         "with_provenance": provenance,
         "file_formats": f.tally(file_formats),
         "software_formats": f.tally(software_formats),
+        "model_formats": f.tally(model_formats),
         "file_access": f.tally(file_access),
         "software_access": f.tally(software_access),
         "computation_patterns": _fold_patterns(computation_patterns),

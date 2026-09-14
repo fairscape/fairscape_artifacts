@@ -19,6 +19,7 @@ DESCRIPTION_LIMIT = 100
 
 TABS = (
     ("dataset", "datasets", "Datasets"),
+    ("mlmodel", "models", "ML models"),
     ("software", "software", "Software"),
     ("computation", "computations", "Computations"),
     ("sample", "samples", "Samples"),
@@ -41,8 +42,9 @@ def _ref_row(ref_id: str, index, owner, here: str, *, with_format: bool = True):
 
 def computation_details(node, index, owner, here: str) -> Dict[str, Any]:
     used = ref_ids(node, "usedDataset")
-    software = ref_ids(node, "usedSoftware", "usedMLModel")
-    if not used and not software:
+    software = ref_ids(node, "usedSoftware")
+    models = ref_ids(node, "usedMLModel")
+    if not used and not software and not models:
         for pid in ref_ids(node, "prov:used"):
             target = index.get(pid)
             (software if target and f.bucket(target) == "software" else used).append(pid)
@@ -54,6 +56,7 @@ def computation_details(node, index, owner, here: str) -> Dict[str, Any]:
         "outputs": [_ref_row(o, index, owner, here)
                     for o in ref_ids(node, "generated", "prov:generated")],
         "software": [_ref_row(s, index, owner, here, with_format=False) for s in software],
+        "models": [_ref_row(m, index, owner, here) for m in models],
         "command": f.text(command),
         "parameters": f.as_list(node.get("parameter")),
     }

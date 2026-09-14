@@ -36,6 +36,7 @@ TILES = (
     ("Datasets", "dataset", "evi:datasetCount"),
     ("Computations", "computation", "evi:computationCount"),
     ("Software", "software", "evi:softwareCount"),
+    ("ML models", "mlmodel", "evi:mlModelCount"),
     ("Samples", "sample", "evi:sampleCount"),
     ("Experiments", "experiment", "evi:experimentCount"),
     ("Instruments", "instrument", "evi:instrumentCount"),
@@ -173,6 +174,7 @@ def summary(crate: Crate, comp: Composition) -> Dict[str, Any]:
                 counts[kind] += 1
                 if kind == "dataset":
                     format_counter.update(f.formats_of(node))
+                if kind in ("dataset", "mlmodel"):
                     size_total += f.size_bytes(node.get("contentSize")) or 0
         formats = [label for label, _ in format_counter.most_common()]
 

@@ -65,7 +65,7 @@
           {{ desc(item) }}
           <td class="mono nowrap">{{ item.date }}</td>
           {{ ident(item) }}
-          <td>{% if item.computation.inputs or item.computation.outputs or item.computation.software or item.computation.command %}<button class="toggle" data-toggle="c-{{ loop.index }}">Show details</button>{% else %}<span class="muted">None recorded</span>{% endif %}</td>
+          <td>{% if item.computation.inputs or item.computation.outputs or item.computation.software or item.computation.models or item.computation.command %}<button class="toggle" data-toggle="c-{{ loop.index }}">Show details</button>{% else %}<span class="muted">None recorded</span>{% endif %}</td>
         </tr>
         <tr class="details-row" id="c-{{ loop.index }}" hidden>
           <td colspan="5">
@@ -80,6 +80,12 @@
             <div class="io-heading">Outputs <span class="n">{{ c.outputs|length }}</span></div>
             <table class="inner"><thead><tr><th>Name</th><th>Identifier</th><th>Format</th></tr></thead><tbody>
               {%- for e in c.outputs %}<tr><td>{{ e.name }}</td><td class="mono">{{ e.id }}</td><td class="mono">{{ e.format or '—' }}</td></tr>{% endfor %}
+            </tbody></table>
+            {%- endif %}
+            {%- if c.models %}
+            <div class="io-heading">Models used <span class="n">{{ c.models|length }}</span></div>
+            <table class="inner"><thead><tr><th>Name</th><th>Identifier</th><th>Format</th></tr></thead><tbody>
+              {%- for e in c.models %}<tr><td>{{ e.name }}{% if e.crate %} <span class="muted">(from {{ e.crate }})</span>{% endif %}</td><td class="mono">{{ e.id }}</td><td class="mono">{{ e.format or '—' }}</td></tr>{% endfor %}
             </tbody></table>
             {%- endif %}
             {%- if c.software %}
@@ -124,7 +130,7 @@
         {%- endfor %}
       </tbody>
     </table>
-    {%- elif tab.key in ('datasets', 'software') %}
+    {%- elif tab.key in ('datasets', 'models', 'software') %}
     <table>
       <thead><tr><th>Name</th><th>Description</th><th>Format</th><th>Size</th><th>Access</th><th>Date</th><th>Identifier</th></tr></thead>
       <tbody>

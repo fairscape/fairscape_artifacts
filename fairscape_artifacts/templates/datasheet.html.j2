@@ -268,6 +268,7 @@
         {%- if item.size %}<span class="tag">{{ item.size }}</span>{% endif %}
         <span class="tag">{{ d.files }} file{{ '' if d.files == 1 else 's' }}</span>
         {%- if d.computations %}<span class="tag">{{ d.computations }} computation{{ '' if d.computations == 1 else 's' }}</span>{% endif %}
+        {%- if d.models %}<span class="tag">{{ d.models }} ML model{{ '' if d.models == 1 else 's' }}</span>{% endif %}
         {%- if d.experiments %}<span class="tag">{{ d.experiments }} experiment{{ '' if d.experiments == 1 else 's' }}</span>{% endif %}
         {%- for fmt in d.file_formats[:3] %}<span class="tag fmt">{{ fmt.label }}</span>{% endfor %}
       </span>
@@ -344,6 +345,7 @@
           {%- for p in d.computation_patterns.rows %}<div class="srow indent">{{ pattern(p) }}</div>{% endfor %}
           {%- if d.computation_patterns.more %}<div class="srow indent muted">+{{ d.computation_patterns.more }} more patterns</div>{% endif %}
           {%- if d.computations and item.preview_href %}<div class="srow indent muted">Inputs, outputs and commands are listed in the <a href="{{ item.preview_href }}">full dataset details</a>.</div>{% endif %}
+          {%- if d.models %}<div class="srow"><b>ML models</b> {{ d.models }}{% if d.model_formats %} <span class="muted">({{ tally(d.model_formats) }})</span>{% endif %}</div>{% endif %}
           <div class="srow"><b>Schemas</b> {{ d.schemas }}</div>
           <div class="srow"><b>Other</b> {{ d.other }}</div>
         </div>

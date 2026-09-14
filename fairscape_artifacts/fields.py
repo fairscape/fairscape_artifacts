@@ -274,18 +274,18 @@ def has_provenance(node: Dict[str, Any]) -> bool:
 # -- classification ----------------------------------------------------------
 
 #: Display buckets, in the order the composition cards use them.
-BUCKETS = ("dataset", "software", "instrument", "sample", "experiment",
+BUCKETS = ("dataset", "mlmodel", "software", "instrument", "sample", "experiment",
            "computation", "schema", "other")
 
 _BUCKET_OF = {
-    "Dataset": "dataset", "Software": "software", "Instrument": "instrument",
-    "Sample": "sample", "Experiment": "experiment", "Computation": "computation",
-    "Schema": "schema", "ROCrate": "rocrate",
+    "Dataset": "dataset", "MLModel": "mlmodel", "Software": "software",
+    "Instrument": "instrument", "Sample": "sample", "Experiment": "experiment",
+    "Computation": "computation", "Schema": "schema", "ROCrate": "rocrate",
 }
 
 
-_EVI_PREFERENCE = ("ROCrate", "Computation", "Software", "Experiment", "Schema",
-                   "Sample", "Instrument", "Dataset")
+_EVI_PREFERENCE = ("ROCrate", "Computation", "Software", "MLModel", "Experiment",
+                   "Schema", "Sample", "Instrument", "Dataset")
 
 #: Types that say nothing about *which kind* of entity a node is: the bare
 #: PROV classes, and RO-Crate's data-carrying types, which every file entity
