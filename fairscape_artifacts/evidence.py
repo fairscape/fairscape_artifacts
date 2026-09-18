@@ -137,16 +137,25 @@ class EvidenceGraph:
     """
 
     def __init__(self, cache, condense_threshold: Optional[int] = 5,
-                 crate_root_id: Optional[str] = None):
+                 crate_root_id: Optional[str] = None,
+                 owner: Optional[Dict[str, str]] = None,
+                 crate_names: Optional[Dict[str, str]] = None):
         self.cache = cache
         self.condense_threshold = condense_threshold
         self.crate_root_id = crate_root_id
+        #: id -> root id of the crate that supplied the node (linked crates)
+        self.owner = owner or {}
+        #: crate root id -> display name, for the `crate` annotation
+        self.crate_names = crate_names or {}
 
     @classmethod
     def from_crate(cls, crate, condense_threshold: Optional[int] = 5) -> "EvidenceGraph":
-        """Index a crate's `@graph` as the node cache."""
-        return cls(dict(crate.index), condense_threshold=condense_threshold,
-                   crate_root_id=crate.root_id)
+        """Index a crate's `@graph` — and every crate it links to — as the
+        node cache, so the walk crosses into an upstream crate wherever this
+        one carries a stub of something the upstream produced."""
+        index, owner, names = _linked_index(crate)
+        return cls(index, condense_threshold=condense_threshold,
+                   crate_root_id=crate.root_id, owner=owner, crate_names=names)
 
     def build(self, node_id: str, *, owner: str = "local",
               name: Optional[str] = None,
@@ -255,6 +264,13 @@ class EvidenceGraph:
         if node.get("createdBy"):
             result["createdBy"] = node["createdBy"]
 
+        source = self.owner.get(node_id)
+        if source and self.crate_root_id and source != self.crate_root_id:
+            # the node came from a linked crate: say so, so a reader of the
+            # JSON (and any viewer that shows it) knows where the chain went
+            result["crate"] = {"@id": source,
+                               "name": self.crate_names.get(source, source)}
+
         if node_id == start_crate_id and start_crate_outputs:
             result["hasOutputs"] = start_crate_outputs
 
@@ -310,23 +326,39 @@ def build(crate, node_id: Optional[str] = None, *, owner: str = "local",
     root is recognized as the crate's root entity, not by its `@type`: a
     PROV-only crate's root is a plain `Dataset`.
     """
-    index = _rooted_index(crate, node_id or crate.root_id)
-    return EvidenceGraph(index, condense_threshold,
-                         crate_root_id=crate.root_id).build(
+    index, owners, names = _rooted_index(crate, node_id or crate.root_id)
+    return EvidenceGraph(index, condense_threshold, crate_root_id=crate.root_id,
+                         owner=owners, crate_names=names).build(
         node_id or crate.root_id, owner=owner, name=name, description=description)
 
 
-def _rooted_index(crate, target: str) -> Dict[str, Node]:
-    """The crate's index, with the root's outputs derived in memory if it is
-    the target and has none recorded. The file on disk is never touched."""
-    index = dict(crate.index)
+def _linked_index(crate):
+    """`(index, owner, names)`: the crate's nodes plus every linked crate's,
+    the linked copy winning over this crate's stub (see
+    `Crate.provenance_index`); `names` maps crate root ids to display names.
+    A crate built in memory (no path) has nothing to link to."""
+    if getattr(crate, "provenance_index", None) is None:
+        return dict(crate.index), {}, {}
+    index, owner = crate.provenance_index()
+    names = {crate.root_id: crate.name}
+    for sub in crate.linked_closure():
+        names[sub.crate.root_id] = sub.crate.name
+    return index, owner, names
+
+
+def _rooted_index(crate, target: str):
+    """The crate's index (spanning its linked crates), with the root's
+    outputs derived in memory if it is the target and has none recorded.
+    The file on disk is never touched, and outputs are derived from this
+    crate's own graph only — what a linked crate produced is its business."""
+    index, owner, names = _linked_index(crate)
     if target == crate.root_id and not _rocrate_outputs(crate.root):
         _, derived = io_outputs.ensure(crate)
         if derived:
             root = dict(crate.root)
             root[io_outputs.EVI_OUTPUTS] = derived
             index[target] = root
-    return index
+    return index, owner, names
 
 
 # ---------------------------------------------------------------------------
@@ -443,9 +475,10 @@ def build_domain(crate, node_id: Optional[str] = None, *, owner: str = "local",
     defaults to off — the point of the domain layer is seeing the full detail.
     """
     target = node_id or crate.root_id
-    view = SpecializationView(_rooted_index(crate, target))
-    graph = EvidenceGraph(view, condense_threshold,
-                          crate_root_id=crate.root_id).build(
+    index, owners, names = _rooted_index(crate, target)
+    view = SpecializationView(index)
+    graph = EvidenceGraph(view, condense_threshold, crate_root_id=crate.root_id,
+                          owner=owners, crate_names=names).build(
         target, owner=owner,
         name=name or f"Domain Evidence Graph for {target}",
         description=description

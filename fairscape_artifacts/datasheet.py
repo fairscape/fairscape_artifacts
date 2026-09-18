@@ -29,7 +29,7 @@ from fairscape_artifacts import composition as composition_mod
 from fairscape_artifacts import fields as f
 from fairscape_artifacts import grading
 from fairscape_artifacts.composition import Composition, resolve_authors
-from fairscape_artifacts.crate import Crate, METADATA_FILENAME
+from fairscape_artifacts.crate import Crate, METADATA_FILENAME, ref_ids
 
 #: Summary tiles, in display order: (label, bucket, evi counter on the root).
 TILES = (
@@ -188,6 +188,9 @@ def summary(crate: Crate, comp: Composition) -> Dict[str, Any]:
     extra = []
     if comp.is_release:
         extra.append({"label": "sub-crates", "n": f"{len(comp.items):,}"})
+    linked = crate.linked_crates()
+    if linked:
+        extra.append({"label": "linked crates", "n": f"{len(linked):,}"})
     for label, bucket, _ in TILES:
         if bucket not in headline_buckets and counts[bucket]:
             extra.append({"label": label.lower(), "n": f"{counts[bucket]:,}"})
@@ -248,6 +251,29 @@ def review_panel(review: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
             "legend": legend, **_points(review["tally"])}
 
 
+def linked_crate_items(crate: Crate) -> List[Dict[str, str]]:
+    """One entry per upstream crate this crate points at: its name, how many
+    of this crate's entities it owns, and a link to its datasheet when one
+    sits beside its metadata file."""
+    items = []
+    for sub in crate.linked_crates():
+        # the stubs: this crate's nodes that say they are part of that crate
+        # (not merely nodes both crates happen to describe, like the engine)
+        shared = [n for n in crate.graph
+                  if sub.crate.root_id in ref_ids(n, "isPartOf")
+                  and n.get("@id") != sub.crate.root_id]
+        count = len(shared)
+        noun = "entity" if count == 1 else "entities"
+        text = f"{sub.crate.name} ({sub.crate.root_id}) — {count} {noun} from this crate"
+        href = ""
+        if sub.crate.dir and os.path.exists(os.path.join(sub.crate.dir, "ro-crate-datasheet.html")):
+            href = os.path.join(sub.rel_dir, "ro-crate-datasheet.html").replace(os.sep, "/") \
+                if not os.path.isabs(sub.rel_dir) else \
+                os.path.join(sub.crate.dir, "ro-crate-datasheet.html")
+        items.append({"text": text, "href": href})
+    return items
+
+
 def overview(crate: Crate, index, link_base: str) -> List[Dict[str, Any]]:
     root = crate.root
     doi = f.first(root, "identifier")
@@ -292,6 +318,8 @@ def overview(crate: Crate, index, link_base: str) -> List[Dict[str, Any]]:
             items=_list_items(publications)),
         row("Based On", id="based-on", kind="list",
             items=_list_items(f.as_list(root.get("isBasedOn")))),
+        row("Linked Crates", id="linked-crates", kind="list",
+            items=linked_crate_items(crate)),
         row("Conforms To", id="conforms-to", kind="list",
             items=_list_items(f.as_list(root.get("conformsTo")))),
     ]

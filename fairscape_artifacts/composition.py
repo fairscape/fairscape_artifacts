@@ -67,7 +67,9 @@ def build_index(crate: Crate, subcrates: List[SubCrate]):
         if nid:
             index[nid] = node
             owner[nid] = crate.name
-    for sub in subcrates:
+    # linked crates first, then constituents: a constituent's copy is the
+    # most authoritative, a linked crate's copy beats this crate's stub
+    for sub in list(crate.linked_closure()) + list(subcrates):
         for node in sub.crate.graph:
             nid = node.get("@id")
             if nid:

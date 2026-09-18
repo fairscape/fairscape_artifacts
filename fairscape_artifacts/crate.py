@@ -17,8 +17,15 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 METADATA_FILENAME = "ro-crate-metadata.json"
 
 #: On a release crate, each constituent crate is a node carrying the path of
-#: its own metadata file, relative to the release crate's directory.
+#: its own metadata file, relative to the release crate's directory. The same
+#: field on a node the root does *not* list in `hasPart` marks a *linked*
+#: crate: an upstream crate this one only points at because it consumed
+#: something the upstream produced (see `Crate.linked_crates`).
 SUBCRATE_PATH_FIELD = "ro-crate-metadata"
+
+#: How many pointer hops the linked-crate walk follows (a linked crate may
+#: itself link onward). Cycles are cut by metadata path regardless.
+LINKED_DEPTH = 4
 
 #: Reference fields whose values are `{"@id": ...}` (or lists/strings thereof).
 REF_FIELDS = (
@@ -116,6 +123,7 @@ class Crate:
         }
         self.root = self._find_root()
         self._sub_crates: Optional[List[SubCrate]] = None
+        self._linked: Optional[List[SubCrate]] = None
 
     # -- construction --------------------------------------------------
 
@@ -163,10 +171,50 @@ class Crate:
 
     # -- sub-crates ----------------------------------------------------
 
-    def sub_crate_stubs(self) -> List[Dict[str, Any]]:
-        """Nodes in this graph that stand for constituent crates on disk."""
+    def _stubs(self) -> List[Dict[str, Any]]:
         return [n for n in self.graph
                 if n.get(SUBCRATE_PATH_FIELD) and n.get("@id") != self.root_id]
+
+    def sub_crate_stubs(self) -> List[Dict[str, Any]]:
+        """Nodes in this graph that stand for constituent crates on disk:
+        crate stubs the root lists in `hasPart`. (A root with no `hasPart` at
+        all keeps the old reading, where every stub is a constituent.)"""
+        stubs = self._stubs()
+        parts = set(ref_ids(self.root, "hasPart"))
+        if not parts:
+            return stubs
+        return [n for n in stubs if n.get("@id") in parts]
+
+    def linked_crate_stubs(self) -> List[Dict[str, Any]]:
+        """Crate stubs the root does not contain: upstream crates this one
+        points at because it consumed something they produced."""
+        parts = set(ref_ids(self.root, "hasPart"))
+        if not parts:
+            return []
+        return [n for n in self._stubs() if n.get("@id") not in parts]
+
+    def _load_stub(self, stub: Dict[str, Any], kind: str) -> Optional["SubCrate"]:
+        """Load the crate a stub points at. The pointer is relative to this
+        crate's directory; an absolute `localPath` on the stub is the
+        fallback when the relative one no longer resolves."""
+        rel = str(stub[SUBCRATE_PATH_FIELD]).replace(os.sep, "/")
+        while rel.startswith("./"):
+            rel = rel[2:]
+        full = os.path.normpath(os.path.join(self.dir, rel))
+        candidates = [full]
+        local = stub.get("localPath")
+        if isinstance(local, str) and local and os.path.normpath(local) != full:
+            candidates.append(os.path.normpath(local))
+        err: Optional[Exception] = None
+        for path in candidates:
+            try:
+                sub = Crate.load(path)
+            except (OSError, ValueError) as e:
+                err = err or e
+                continue
+            return SubCrate(stub=stub, crate=sub, metadata_path=rel)
+        print(f"warning: {kind} {stub.get('@id', rel)!r}: {err}", file=sys.stderr)
+        return None
 
     def sub_crates(self) -> List[SubCrate]:
         """Constituent crates, loaded once from disk and cached.
@@ -182,18 +230,65 @@ class Crate:
         if not self.dir:
             return self._sub_crates
         for stub in self.sub_crate_stubs():
-            rel = str(stub[SUBCRATE_PATH_FIELD]).replace(os.sep, "/")
-            while rel.startswith("./"):
-                rel = rel[2:]
-            full = os.path.normpath(os.path.join(self.dir, rel))
-            try:
-                sub = Crate.load(full)
-            except (OSError, ValueError) as err:
-                print(f"warning: sub-crate {stub.get('@id', rel)!r}: {err}",
-                      file=sys.stderr)
-                continue
-            self._sub_crates.append(SubCrate(stub=stub, crate=sub, metadata_path=rel))
+            loaded = self._load_stub(stub, "sub-crate")
+            if loaded:
+                self._sub_crates.append(loaded)
         return self._sub_crates
+
+    def linked_crates(self) -> List[SubCrate]:
+        """Upstream crates this crate points at, loaded once and cached.
+
+        Same loading rules as `sub_crates`; the difference is what the
+        pointer means. A constituent is *part of* this crate. A linked crate
+        is where an input of this crate came from: the consumer carries a
+        stub of the shared entity under the upstream's own `@id`, and the
+        upstream carries the entity's provenance.
+        """
+        if self._linked is not None:
+            return self._linked
+        self._linked = []
+        if not self.dir:
+            return self._linked
+        for stub in self.linked_crate_stubs():
+            loaded = self._load_stub(stub, "linked crate")
+            if loaded:
+                self._linked.append(loaded)
+        return self._linked
+
+    def linked_closure(self, depth: int = LINKED_DEPTH) -> List[SubCrate]:
+        """Linked crates, and theirs, breadth-first, each once."""
+        out: List[SubCrate] = []
+        seen = {os.path.abspath(self.path)} if self.path else set()
+        frontier: List[Crate] = [self]
+        for _ in range(max(depth, 0)):
+            nxt: List[Crate] = []
+            for crate in frontier:
+                for sub in crate.linked_crates():
+                    key = os.path.abspath(sub.crate.path) if sub.crate.path else id(sub)
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    out.append(sub)
+                    nxt.append(sub.crate)
+            if not nxt:
+                break
+            frontier = nxt
+        return out
+
+    def provenance_index(self, depth: int = LINKED_DEPTH) -> "Tuple[Dict[str, Dict[str, Any]], Dict[str, str]]":
+        """`(index, owner)` spanning this crate and every crate it links to.
+
+        A linked crate's own copy of an entity wins over this crate's stub
+        of it — the stub deliberately carries no provenance, the copy does.
+        `owner` maps every id to the root id of the crate that supplied it.
+        """
+        index: Dict[str, Dict[str, Any]] = dict(self.index)
+        owner: Dict[str, str] = {nid: self.root_id for nid in self.index}
+        for sub in self.linked_closure(depth):
+            for nid, node in sub.crate.index.items():
+                index[nid] = node
+                owner[nid] = sub.crate.root_id
+        return index, owner
 
     # -- access --------------------------------------------------------
 

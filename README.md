@@ -25,6 +25,16 @@ A release crate — one whose graph lists constituent crates by the path of
 their `ro-crate-metadata.json` — gets one composition card per constituent
 and a `ro-crate-preview.html` inside each constituent's directory.
 
+A crate that *points at* another one — a node with that same
+`ro-crate-metadata` field that the root does not list in `hasPart`, the way
+`fairscape_conversion`'s linked-crates pass writes it when an input of this
+crate was an output of that one — is not a release. It renders as itself, the
+linked crate is loaded and layered under it, and the evidence graph walks
+straight through the stub into the upstream chain. Nodes reached that way
+carry `"crate": {"@id", "name"}` in the graph JSON; the datasheet lists the
+linked crates in its overview. A missing upstream is a warning and the graph
+ends at the stub.
+
 Each HTML file is self-contained — styles and the graph viewer are inlined —
 so it can be mailed, dropped into a Zenodo deposit, or served from GitHub
 Pages with nothing beside it.
