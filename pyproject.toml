@@ -18,20 +18,24 @@ dependencies = [
 
 [project.optional-dependencies]
 # AI-Ready review. Scoring is not reimplemented here: the rubric lives in
-# `aireadiness_evidence`, shipped by the fairscape-grader repo. Without it
+# `aireadiness_evidence`, shipped by the AIreadiness-grader repo. Without it
 # every other command still works and the datasheet omits its review section.
-review = ["fairscape-wizard>=0.3.0"]
+review = ["aireadiness-grader>=0.4.0"]
+# LLM interpretation. The engine — condensation, annotation, synthesis and
+# the AnnotatedEvidenceGraph model — is `fairscape-graph-tools`, which brings
+# pydantic-ai and the provider SDKs. Without it `interpret` explains what to
+# install and everything else is unaffected.
+interpret = ["fairscape-graph-tools>=0.2.0"]
 test = ["pytest>=7"]
 
 [project.scripts]
 fairscape-artifacts = "fairscape_artifacts.cli:main"
 
 [tool.hatch.build.targets.wheel]
+# `packages` already ships every file under the package, static/ and
+# templates/ included; force-including them again makes hatchling abort with
+# "A second file is being added to the wheel archive at the same path".
 packages = ["fairscape_artifacts"]
-
-[tool.hatch.build.targets.wheel.force-include]
-"fairscape_artifacts/static" = "fairscape_artifacts/static"
-"fairscape_artifacts/templates" = "fairscape_artifacts/templates"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
