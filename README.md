@@ -40,7 +40,8 @@ deposit or serve it from GitHub Pages.
 | `datasheet` | Builds the datasheet and preview pages. |
 | `evidence-graph` | Builds the graph page and its JSON. |
 | `review` | Runs the AI-Ready grader and writes the review page. |
-| `add-io` | Writes `EVI:inputs` / `EVI:outputs` onto the crate root. This is the only command that changes the crate. |
+| `add-io` | Writes `EVI:inputs` / `EVI:outputs` onto the crate root. Changes the crate. |
+| `link-inverses` | Adds the other half of every EVI link: a computation's `generated` for a dataset's `generatedBy`, and so on. Changes the crate. |
 | `interpret` | Has an LLM read the crate's provenance and code, then writes an annotated summary. `all` never runs it. |
 
 Outputs are written next to the crate unless you pass `-d DIR`.

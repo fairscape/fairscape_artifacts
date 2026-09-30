@@ -4,11 +4,13 @@
     fairscape-artifacts evidence-graph  <crate>
     fairscape-artifacts review          <crate>
     fairscape-artifacts add-io          <crate>
+    fairscape-artifacts link-inverses   <crate>
     fairscape-artifacts all             <crate>
 
 `<crate>` is an RO-Crate directory or its `ro-crate-metadata.json`. Outputs
-land beside the crate unless `-o` says otherwise. `add-io` is the only command
-that writes back into the crate; everything else only ever adds files.
+land beside the crate unless `-o` says otherwise. `add-io` and `link-inverses`
+are the only commands that write back into the crate; everything else only
+ever adds files.
 """
 
 from __future__ import annotations
@@ -25,6 +27,7 @@ from fairscape_artifacts import datasheet as datasheet_mod
 from fairscape_artifacts import evidence as evidence_mod
 from fairscape_artifacts import outputs as outputs_mod
 from fairscape_artifacts import grading
+from fairscape_artifacts import inverses as inverses_mod
 from fairscape_artifacts import preview as preview_mod
 from fairscape_artifacts import render
 from fairscape_artifacts.crate import METADATA_FILENAME, Crate
@@ -198,6 +201,15 @@ def cmd_add_io(args) -> List[str]:
     return [path]
 
 
+def cmd_link_inverses(args) -> List[str]:
+    path = _resolve(args.crate)
+    ok, message = inverses_mod.write(path)
+    print(message)
+    if not ok:
+        raise SystemExit(1)
+    return [path]
+
+
 def cmd_all(args) -> List[str]:
     """Graph, datasheet (with previews), review, datasheet again.
 
@@ -303,6 +315,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     add("add-io", cmd_add_io,
         "Write EVI:inputs / EVI:outputs onto the crate root (modifies the crate).")
+
+    add("link-inverses", cmd_link_inverses,
+        "Complete the inverse EVI links (generated for generatedBy, and so on) "
+        "on every entity (modifies the crate).")
 
     every = add("all", cmd_all, "Graph, review, datasheet and previews in one pass.")
     every.add_argument("--condense-threshold", type=int, default=5,
