@@ -73,7 +73,8 @@ Pages with nothing beside it.
 | `datasheet` | Renders the datasheet and a preview page per crate. `--no-review` omits the AI-Ready section, `--no-previews` skips the preview pages, `--link-base URL` turns identifiers into links. |
 | `evidence-graph` | Renders the graph page plus a JSON sidecar. `--node` roots it elsewhere; `--condense-threshold` tunes fan-in collapsing; `--reference` adds a crate to resolve ids against; `--domain` walks the domain layer of a CPM-style crate (backbone connectors give way to their `prov:specializationOf` entities). |
 | `review` | Runs the AI-Ready grader and writes its evidence presentation and review page. |
-| `add-io` | Writes `EVI:inputs` / `EVI:outputs` onto the crate root. **The only command that modifies the crate.** |
+| `add-io` | Writes `EVI:inputs` / `EVI:outputs` onto the crate root. **Modifies the crate.** |
+| `link-inverses` | Adds the missing inverse of every EVI provenance link (`generated` for `generatedBy`, `datasetUsedBy` for `usedDataset`, …), so the crate reads the same walked in either direction. Existing values are kept, nothing is removed. **Modifies the crate.** |
 | `interpret` | Has an LLM read the crate's provenance and code and writes the annotated evidence graph plus its page. Never part of `all`; see below. |
 | `all` | Graph, review and datasheet in one pass. |
 
@@ -217,6 +218,12 @@ Without it, every other command works and the datasheet omits the section.
   URLs and registries.
 * Building an evidence graph never modifies the crate; if a crate has no
   declared outputs they are derived in memory. Use `add-io` to persist them.
+* No builder here needs the inverse EVI links; they are read from the declared
+  side. `link-inverses` exists for consumers that walk the graph the other
+  way, and replaces the `augment link-inverses` step the workflow reporters
+  used to get from `fairscape-cli`. The `owl:inverseOf` pairs are pinned in
+  `inverses.py`; `tests/test_inverses.py` re-derives them from the EVI
+  ontology when rdflib and the CLI checkout are available.
 * `outputs.calculate` is pinned by `tests/outputs-golden.json`. It
   deliberately drops the `fairscape-cli` `isPartOf` containment rule: in
   this corpus that rule fires against the crate root and deletes every output
