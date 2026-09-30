@@ -257,13 +257,25 @@ class Crate:
 
     def linked_closure(self, depth: int = LINKED_DEPTH) -> List[SubCrate]:
         """Linked crates, and theirs, breadth-first, each once."""
+        return self._closure(depth, lambda crate: crate.linked_crates())
+
+    def crate_closure(self, depth: int = LINKED_DEPTH) -> List[SubCrate]:
+        """Every crate reachable from this one by a pointer, each once.
+
+        Constituents *and* linked crates, and theirs, breadth-first. Both
+        kinds hold entities this crate's graph refers to and does not
+        describe, which is the only thing resolving a reference cares about.
+        """
+        return self._closure(depth, lambda crate: crate.sub_crates() + crate.linked_crates())
+
+    def _closure(self, depth: int, step) -> List[SubCrate]:
         out: List[SubCrate] = []
         seen = {os.path.abspath(self.path)} if self.path else set()
         frontier: List[Crate] = [self]
         for _ in range(max(depth, 0)):
             nxt: List[Crate] = []
             for crate in frontier:
-                for sub in crate.linked_crates():
+                for sub in step(crate):
                     key = os.path.abspath(sub.crate.path) if sub.crate.path else id(sub)
                     if key in seen:
                         continue
@@ -275,19 +287,47 @@ class Crate:
             frontier = nxt
         return out
 
-    def provenance_index(self, depth: int = LINKED_DEPTH) -> "Tuple[Dict[str, Dict[str, Any]], Dict[str, str]]":
-        """`(index, owner)` spanning this crate and every crate it links to.
+    def provenance_index(self, depth: int = LINKED_DEPTH,
+                         pool: "Iterable[Crate]" = ()) -> "Tuple[Dict[str, Dict[str, Any]], Dict[str, str]]":
+        """`(index, owner)` spanning every crate that could resolve a
+        reference made in this one.
 
-        A linked crate's own copy of an entity wins over this crate's stub
-        of it — the stub deliberately carries no provenance, the copy does.
-        `owner` maps every id to the root id of the crate that supplied it.
+        A reference in a crate is a bare `@id`: nothing in it says which
+        crate holds the entity, so an entity described next door reads as a
+        dangling id. This gathers the crates that might hold it —
+
+        * this crate;
+        * everything `crate_closure` reaches: constituents, the crates this
+          one links to, and theirs. Their own copy of an entity wins over a
+          stub of it here, because a stub deliberately carries no provenance
+          and the copy does;
+        * `pool`, crates the caller knows are related but this one does not
+          point at — sibling constituents of the same release, say, which
+          refer to each other's entities without either owning the other.
+          Consulted last and only for ids still unresolved, so a wide pool
+          can fill gaps but never overrule a crate that was actually
+          pointed at.
+
+        `owner` maps every id to the root id of the crate that supplied it,
+        which is how the evidence graph labels a node that came from
+        somewhere else. The `ro-crate-metadata.json` descriptor is never
+        merged: every crate has one, they differ, and none is ever the
+        target of a reference.
         """
         index: Dict[str, Dict[str, Any]] = dict(self.index)
         owner: Dict[str, str] = {nid: self.root_id for nid in self.index}
-        for sub in self.linked_closure(depth):
+        for sub in self.crate_closure(depth):
             for nid, node in sub.crate.index.items():
+                if nid == METADATA_FILENAME or nid == self.root_id:
+                    continue
                 index[nid] = node
                 owner[nid] = sub.crate.root_id
+        for crate in pool:
+            for nid, node in crate.index.items():
+                if nid in index or nid == METADATA_FILENAME:
+                    continue
+                index[nid] = node
+                owner[nid] = crate.root_id
         return index, owner
 
     # -- access --------------------------------------------------------

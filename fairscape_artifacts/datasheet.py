@@ -417,7 +417,7 @@ def build_context(crate: Crate, *, composition: Optional[Composition] = None,
     review_summary = review_panel(grading.summarize(review))
     use_case_rows = use_cases(crate)
     links = {"evidence_graph": "", "review_html": "", "review_json": "", "graph_json": "",
-             **(links or {})}
+             "interpretation_html": "", "interpretation_json": "", **(links or {})}
 
     return {
         "kicker": "Datasheet",

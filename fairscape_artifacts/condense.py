@@ -178,12 +178,21 @@ def _group_node(consuming_id: str, sig: Signature, member_ids: List[str],
 
 
 def condense_cache(node_cache: Dict[str, Node], threshold: Optional[int] = 5,
-                   max_member_ids: int = 0) -> Dict[str, Any]:
+                   max_member_ids: int = 0,
+                   collapsed_into: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
     """Condense `node_cache` in place; return stats describing what happened.
 
     Mutates the cache: adds group nodes, drops collapsed members and their
     exclusive ancestors, and rewrites each computation's `usedDataset` to
     point at the group instead of its members.
+
+    `collapsed_into`, when given, is filled with `{removed id: group id}` for
+    every node a group now stands in for — its members and the ancestors only
+    they reached. The consuming computation is rewritten here, but anything
+    *else* still holding one of those ids (the crate's own output list, a
+    `generatedBy` edge from a node that survived) has to redirect it too, or
+    it would read as a reference to something missing rather than to
+    something summarized.
 
     A threshold of `None` turns grouping off entirely and leaves the cache
     untouched — what a domain-layer graph wants, since its whole point is
@@ -223,6 +232,7 @@ def condense_cache(node_cache: Dict[str, Node], threshold: Optional[int] = 5,
                 continue
 
             representative_id = sorted(member_ids)[0]
+            before = set(collapsed)
             for member_id in member_ids:
                 if member_id != representative_id:
                     _collect_exclusive(member_id, representative_id, node_cache, collapsed)
@@ -230,6 +240,10 @@ def condense_cache(node_cache: Dict[str, Node], threshold: Optional[int] = 5,
             group = _group_node(comp_id, sig, member_ids, representative_id,
                                 node_cache, max_member_ids)
             groups.append(group)
+            if collapsed_into is not None:
+                for gone in (collapsed - before) | set(member_ids):
+                    if gone != representative_id:
+                        collapsed_into.setdefault(gone, group["@id"])
 
             members = set(member_ids)
             # Rewritten as `usedDataset` whatever the source spelling was:

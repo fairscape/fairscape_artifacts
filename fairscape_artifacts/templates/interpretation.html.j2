@@ -1,0 +1,177 @@
+{% extends "base.html.j2" %}
+
+{#- Graph first. One plain sentence above it, one caption line under it,
+    and every longer piece collapsed below, in the order a newcomer wants
+    it: findings, assumptions, steps, then the full narrative. Per-node
+    detail lives in the graph's own drawer, opened by a click or by a
+    "Show in graph" button. -#}
+
+{% macro locate(node_id, label="Show in graph") -%}
+{%- if node_id %}<button type="button" class="locate" data-node="{{ node_id }}">{{ label }}</button>{% endif -%}
+{%- endmacro %}
+
+{% macro assumption(a, show_source=false) -%}
+<details class="assm impact-{{ a.impact|lower }}">
+  <summary>
+    <span class="badge impact {{ a.impact|lower }}">{{ a.impact|capitalize }}</span>
+    <span class="assm-name">{{ a.name or a.description|truncate(90) }}</span>
+    {%- if a.review %}<span class="tag review">review</span>{% endif %}
+  </summary>
+  <div class="assm-body">
+    <p>{{ a.description }}</p>
+    {%- if a.downstream %}<p><b>If wrong:</b> {{ a.downstream }}</p>{% endif %}
+    {%- if a.validation %}<p><b>How to check:</b> {{ a.validation }}</p>{% endif %}
+    {%- if a.evidence %}
+    <p class="small muted">Evidence: {% if a.evidence.href %}<a href="{{ a.evidence.href }}">{{ a.evidence.name or a.evidence.id }}</a>{% else %}{{ a.evidence.name or a.evidence.id }}{% endif %}{% if a.evidence.location %} &middot; {{ a.evidence.location }}{% endif %}</p>
+    {%- endif %}
+    {%- if show_source and a.source_label %}
+    <p class="small muted">From {{ a.source_label }} {{ locate(a.source_node) }}</p>
+    {%- endif %}
+  </div>
+</details>
+{%- endmacro %}
+
+{% macro io_chips(items) -%}
+{%- for d in items %}<span class="chip-sm"{% if d.get('description') %} title="{{ d.description }}"{% endif %}>{% if d.href %}<a href="{{ d.href }}">{{ d.name }}</a>{% else %}{{ d.name }}{% endif %}</span>{% endfor -%}
+{%- endmacro %}
+
+{% block head %}
+<style>{{ viewer_css }}</style>
+{%- endblock %}
+
+{% block main %}
+<section class="intro">
+  {%- if gist %}
+  <p class="intro-lead">{{ gist }}</p>
+  {%- endif %}
+</section>
+
+<div id="annotated-graph" class="annotated-graph"></div>
+
+<p class="graph-caption">
+  <span class="legend"><i class="dot clear"></i>Clear</span>
+  <span class="legend"><i class="dot review"></i>Worth a closer look</span>
+  <span class="legend"><i class="dot err"></i>Error found</span>
+  <span class="caption-hint">Click a step to see what it did and what it assumed; close the pop-up to see the files it unfolded. Reset graph starts over.</span>
+</p>
+
+<section class="more">
+  {%- if findings %}
+  <details class="more-block" open>
+    <summary>Key findings <span class="count">{{ findings|length }}</span></summary>
+    <div class="more-body">
+      <ul class="findings">
+        {%- for item in findings %}
+        <li>{{ item }}</li>
+        {%- endfor %}
+      </ul>
+    </div>
+  </details>
+  {%- endif %}
+
+  {%- if assumptions %}
+  <details class="more-block">
+    <summary>Assumptions <span class="count">{% for t in impact_tally if t.n %}{{ t.n }} {{ t.impact|lower }}{% if not loop.last %} &middot; {% endif %}{% endfor %}</span></summary>
+    <div class="more-body">
+      <p class="hint">What the result rests on, most consequential first. Open one for what happens if it is wrong and how to check it.</p>
+      {%- for a in assumptions %}
+      {{ assumption(a, show_source=true) }}
+      {%- endfor %}
+    </div>
+  </details>
+  {%- endif %}
+
+  <details class="more-block">
+    <summary>Steps <span class="count">{{ steps|length }}{% if stats[1].n %} &middot; {{ stats[1].n }} worth a closer look{% endif %}{% if stats[3].n %} &middot; {{ stats[3].n }} error{{ 's' if stats[3].n != 1 }}{% endif %}</span></summary>
+    <div class="more-body">
+      {%- for step in steps %}
+      <details class="step status-{{ step.status }}" id="{{ step.anchor }}">
+        <summary class="step-head">
+          <span class="step-n{% if step.umbrella %} run{% endif %}">{{ step.number if step.number else "run" }}</span>
+          <span class="step-title" title="{{ step.raw_name }}">{{ step.name }}{% if step.headline %}<span class="step-headline">{{ step.headline }}</span>{% endif %}</span>
+          <span class="badge status {{ step.status }}">{{ step.status_label }}</span>
+        </summary>
+        <div class="step-body">
+          <p>{{ step.gist or step.summary }} {% if not step.umbrella %}{{ locate(step.computation_id) }}{% endif %}</p>
+          <p class="io">
+            {%- if step.inputs %}<span class="io-k">Reads</span> {{ io_chips(step.inputs) }}{% endif %}
+            {%- if step.outputs %}<span class="io-k">Makes</span> {{ io_chips(step.outputs) }}{% endif %}
+            {%- if step.code %}<span class="io-k">Runs</span> {{ io_chips(step.code) }}{% endif %}
+          </p>
+          {%- if step.errors %}
+          <h4>Errors found</h4>
+          {%- for e in step.errors %}
+          <div class="error">
+            <span class="badge impact {{ e.severity|lower }}">{{ e.severity|capitalize }}</span> {{ e.description }}
+            {%- if e.affected %}<p class="small"><b>Affects:</b> {{ e.affected }}</p>{% endif %}
+          </div>
+          {%- endfor %}
+          {%- endif %}
+          {%- if step.assumptions %}
+          <h4>What this step assumes</h4>
+          {%- for a in step.assumptions %}{{ assumption(a) }}{% endfor %}
+          {%- endif %}
+          <details class="fold">
+            <summary>Read the full analysis</summary>
+            <div class="fold-body">
+              <p>{{ step.summary }}</p>
+              {%- if step.command %}<code class="cmd">{{ step.command }}</code>{% endif %}
+              {%- for c in step.code %}
+              <h4>Code: {{ c.name }}</h4>
+              <p>{{ c.summary }}</p>
+              {%- if c.functions %}<p class="small"><b>Key functions:</b> {% for fn in c.functions %}<code>{{ fn }}</code>{% if not loop.last %}, {% endif %}{% endfor %}</p>{% endif %}
+              {%- for a in c.assumptions %}{{ assumption(a) }}{% endfor %}
+              {%- endfor %}
+              {%- set quality = (step.inputs + step.outputs) | selectattr("quality") | list %}
+              {%- if quality %}
+              <h4>Data quality</h4>
+              <ul class="plain ds">
+                {%- for d in quality %}<li><b>{{ d.name }}</b> &mdash; {{ d.quality }}</li>{% endfor %}
+              </ul>
+              {%- endif %}
+            </div>
+          </details>
+        </div>
+      </details>
+      {%- endfor %}
+    </div>
+  </details>
+
+  <details class="more-block">
+    <summary>Full narrative</summary>
+    <div class="more-body">
+      {%- if executive %}<p class="lead">{{ executive }}</p>{% endif %}
+      {%- for para in narrative %}
+      <p>{{ para }}</p>
+      {%- endfor %}
+    </div>
+  </details>
+
+  {%- for aud in audiences %}
+  <details class="more-block">
+    <summary>For a {{ aud.label|lower }}</summary>
+    <div class="more-body">
+      {%- if aud.executive %}<p class="lead">{{ aud.executive }}</p>{% endif %}
+      {%- for para in aud.narrative %}<p>{{ para }}</p>{% endfor %}
+      {%- if aud.findings %}<ul class="findings">{% for item in aud.findings %}<li>{{ item }}</li>{% endfor %}</ul>{% endif %}
+      {%- for a in aud.assumptions %}{{ assumption(a, show_source=true) }}{% endfor %}
+    </div>
+  </details>
+  {%- endfor %}
+
+  <p class="page-note small">An AI reading of the provenance and code by <code>{{ model }}</code>{% if created %} on {{ created }}{% endif %}: a starting point for review, not a verdict. {% if crate.href %}<a href="{{ crate.href }}">{{ crate.id }}</a>{% else %}{{ crate.id }}{% endif %}{% if overview.license %} &middot; {{ overview.license }}{% endif %}</p>
+</section>
+{%- endblock %}
+
+{% block scripts %}
+<script>window.__FS_LINK_BASE__ = {{ link_base_json }}; window.__ANNOTATED_GRAPH__ = {{ graph_json }};</script>
+<script>{{ viewer_js }}</script>
+<script>
+document.addEventListener("click", function (event) {
+  var button = event.target.closest && event.target.closest("button.locate");
+  if (button && window.FairscapeAnnotatedGraph) {
+    window.FairscapeAnnotatedGraph.select(button.getAttribute("data-node"));
+  }
+});
+</script>
+{%- endblock %}

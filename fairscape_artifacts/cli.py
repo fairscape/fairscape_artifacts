@@ -5,12 +5,17 @@
     fairscape-artifacts review          <crate>
     fairscape-artifacts add-io          <crate>
     fairscape-artifacts link-inverses   <crate>
+    fairscape-artifacts interpret       <crate>
     fairscape-artifacts all             <crate>
 
 `<crate>` is an RO-Crate directory or its `ro-crate-metadata.json`. Outputs
 land beside the crate unless `-o` says otherwise. `add-io` and `link-inverses`
 are the only commands that write back into the crate; everything else only
 ever adds files.
+
+`all` is the offline set: graph, review, datasheet and previews. `interpret`
+calls an LLM and is run on its own; the datasheet links to its output when
+one is already beside the crate.
 """
 
 from __future__ import annotations
@@ -27,6 +32,7 @@ from fairscape_artifacts import datasheet as datasheet_mod
 from fairscape_artifacts import evidence as evidence_mod
 from fairscape_artifacts import outputs as outputs_mod
 from fairscape_artifacts import grading
+from fairscape_artifacts import interpretation as interpretation_mod
 from fairscape_artifacts import inverses as inverses_mod
 from fairscape_artifacts import preview as preview_mod
 from fairscape_artifacts import render
@@ -40,6 +46,8 @@ GRAPH_DOMAIN_HTML = "ro-crate-evidence-graph-domain.html"
 GRAPH_DOMAIN_JSON = "ro-crate-evidence-graph-domain.json"
 REVIEW_JSON = "ai-ready-presentation.json"
 REVIEW_HTML = "ai-ready-review.html"
+INTERPRETATION_JSON = interpretation_mod.INTERPRETATION_JSON
+INTERPRETATION_HTML = interpretation_mod.INTERPRETATION_HTML
 
 
 def _resolve(path: str) -> str:
@@ -94,7 +102,9 @@ def _links(out_dir: str) -> Dict[str, str]:
     """Companion pages the datasheet may link to, if they exist beside it."""
     return {key: name if os.path.exists(os.path.join(out_dir, name)) else ""
             for key, name in (("evidence_graph", GRAPH_HTML), ("graph_json", GRAPH_JSON),
-                              ("review_html", REVIEW_HTML), ("review_json", REVIEW_JSON))}
+                              ("review_html", REVIEW_HTML), ("review_json", REVIEW_JSON),
+                              ("interpretation_html", INTERPRETATION_HTML),
+                              ("interpretation_json", INTERPRETATION_JSON))}
 
 
 def _rel(target: str, start_dir: str) -> str:
@@ -144,15 +154,16 @@ def cmd_evidence_graph(args) -> List[str]:
     crate = Crate.load(path)
     out_dir = _out_dir(path, args.output_dir)
     threshold = args.condense_threshold
+    pool = list(getattr(args, "reference", []) or [])
     if args.domain:
         # Condensation defaults off for the domain layer: its whole point is
         # seeing every node, so only an explicit --condense-threshold groups.
         graph = evidence_mod.build_domain(crate, node_id=args.node,
-                                          condense_threshold=threshold)
+                                          condense_threshold=threshold, pool=pool)
     else:
         graph = evidence_mod.build(crate, node_id=args.node,
                                    condense_threshold=5 if threshold is None
-                                   else threshold)
+                                   else threshold, pool=pool)
 
     html_name, json_name = ((GRAPH_DOMAIN_HTML, GRAPH_DOMAIN_JSON) if args.domain
                             else (GRAPH_HTML, GRAPH_JSON))
@@ -192,6 +203,82 @@ def cmd_review(args) -> List[str]:
     return written
 
 
+def cmd_interpret(args) -> List[str]:
+    """LLM interpretation: the annotated evidence graph JSON and its page.
+
+    Deliberately not part of `all`. It needs an API key, costs one call per
+    computation plus a few for synthesis, and can take minutes on a large
+    crate. `--render-only` rebuilds the page from an interpretation already
+    on disk without calling the model.
+    """
+    path = _resolve(args.crate)
+    crate = Crate.load(path)
+    out_dir = _out_dir(path, args.output_dir)
+    json_path = args.output or os.path.join(out_dir, INTERPRETATION_JSON)
+    written: List[str] = []
+
+    if args.agentic:
+        done = _interpret_agentic(args, crate, path, out_dir, json_path)
+        if done is not None:
+            return done
+        aeg = interpretation_mod.load(json_path)
+        written.append(json_path)
+    elif args.render_only:
+        if not os.path.exists(json_path):
+            raise SystemExit(f"error: no interpretation at {json_path}")
+        aeg = interpretation_mod.load(json_path)
+    else:
+        try:
+            interpretation_mod.configure_api_key(args.model, args.api_key)
+        except ValueError as err:
+            raise SystemExit(f"error: {err}")
+        references = [Crate.load(_resolve(ref)) for ref in args.reference]
+        trace = json_path + ".llm-trace.jsonl" if args.debug_llm else None
+        try:
+            aeg = interpretation_mod.run(
+                crate, output_path=json_path, references=references,
+                model=args.model, temperature=args.temperature,
+                max_workers=args.max_workers, condensed_path=args.save_condensed,
+                trace_path=trace, progress=_progress(args.quiet))
+        except interpretation_mod.InterpreterUnavailable as err:
+            raise SystemExit(f"error: {err}")
+        written.append(json_path)
+        if args.save_condensed:
+            written.append(args.save_condensed)
+        if trace:
+            written.append(trace)
+
+    if not args.no_html:
+        context = interpretation_mod.summarize(aeg, link_base=args.link_base)
+        html_path = os.path.join(os.path.dirname(os.path.abspath(json_path)),
+                                 INTERPRETATION_HTML)
+        written.append(render.write(html_path, render.interpretation_html({
+            **context, "source": os.path.basename(path), "generated_at": _stamp()})))
+    return written
+
+
+def _interpret_agentic(args, crate, path, out_dir, json_path) -> Optional[List[str]]:
+    """One stage of `interpret --agentic`. Returns the files written for
+    `prepare` and `steps`; `None` after `assemble` so the caller renders."""
+    try:
+        from fairscape_artifacts.interpret import agentic
+    except ImportError as err:  # pragma: no cover - depends on the environment
+        raise SystemExit(f"error: {err}; install 'fairscape-artifacts[interpret]'")
+    work = args.work_dir or os.path.join(out_dir, "interpretation-work")
+    try:
+        if args.agentic == "prepare":
+            references = [Crate.load(_resolve(ref)) for ref in args.reference]
+            steps = agentic.prepare(crate, work, references=references,
+                                    output_path=json_path, model_label=args.model_label)
+            return [os.path.join(d, agentic.PACKET) for d in steps]
+        if args.agentic == "steps":
+            return [agentic.collect_steps(work)]
+        agentic.assemble(work)
+    except agentic.AgenticError as err:
+        raise SystemExit(f"error: {err}")
+    return None
+
+
 def cmd_add_io(args) -> List[str]:
     path = _resolve(args.crate)
     ok, message = outputs_mod.write(path)
@@ -226,7 +313,8 @@ def cmd_all(args) -> List[str]:
     out_dir = _out_dir(path, args.output_dir)
     written = []
 
-    graph = evidence_mod.build(crate, condense_threshold=args.condense_threshold)
+    graph = evidence_mod.build(crate, condense_threshold=args.condense_threshold,
+                               pool=list(getattr(args, "reference", []) or []))
     written.append(render.write(
         os.path.join(out_dir, GRAPH_HTML),
         render.evidence_graph_html(graph, source=os.path.basename(path),
@@ -304,6 +392,11 @@ def build_parser() -> argparse.ArgumentParser:
                             "connectors are replaced by their "
                             "prov:specializationOf domain entities. Writes "
                             f"{GRAPH_DOMAIN_HTML} / {GRAPH_DOMAIN_JSON}")
+    graph.add_argument("--reference", action="append", default=[], metavar="CRATE",
+                       help="extra crate to resolve ids against (repeatable); "
+                            "constituents and linked crates are always included. "
+                            "Use it for a sibling that describes entities this "
+                            "crate only refers to")
     graph.add_argument("--no-json", action="store_true",
                        help="skip the sidecar graph JSON")
 
@@ -320,12 +413,54 @@ def build_parser() -> argparse.ArgumentParser:
         "Complete the inverse EVI links (generated for generatedBy, and so on) "
         "on every entity (modifies the crate).")
 
+    interp = add("interpret", cmd_interpret,
+                 "Interpret the crate with an LLM: annotated evidence graph "
+                 "JSON and page. Needs the 'interpret' extra and an API key.")
+    interp.add_argument("--reference", action="append", default=[], metavar="CRATE",
+                        help="extra crate to resolve ids against (repeatable); "
+                             "constituents and linked crates are always included")
+    interp.add_argument("--model", default=interpretation_mod.DEFAULT_MODEL,
+                        help="pydantic-ai model string, provider:name "
+                             f"(default: {interpretation_mod.DEFAULT_MODEL})")
+    interp.add_argument("--api-key", help="provider API key; otherwise read from "
+                                          "the provider's environment variable")
+    interp.add_argument("--temperature", type=float, default=0.0)
+    interp.add_argument("--max-workers", type=int, default=2,
+                        help="parallel annotation calls (default: 2)")
+    interp.add_argument("--save-condensed", metavar="PATH",
+                        help="also write the condensed crate the engine built")
+    interp.add_argument("--debug-llm", action="store_true",
+                        help=f"append every raw LLM response to "
+                             f"{INTERPRETATION_JSON}.llm-trace.jsonl")
+    interp.add_argument("--render-only", action="store_true",
+                        help="rebuild the page from the existing JSON, no LLM")
+    interp.add_argument("--no-html", action="store_true",
+                        help="write the JSON only")
+    interp.add_argument("--link-base", default="",
+                        help="server URL to link identifiers to (default: plain text)")
+    interp.add_argument("-q", "--quiet", action="store_true",
+                        help="suppress progress output")
+    interp.add_argument("--agentic", choices=("prepare", "steps", "assemble"),
+                        help="run without an API key, with the calling agent "
+                             "writing the model answers: 'prepare' writes one "
+                             "packet per computation, 'steps' checks the answers "
+                             "and writes the synthesis packet, 'assemble' builds "
+                             "the JSON and page")
+    interp.add_argument("--work-dir", help="agentic work directory (default: "
+                                           "interpretation-work beside the outputs)")
+    interp.add_argument("--model-label", default="agentic:claude-code",
+                        help="what the interpretation records as its model "
+                             "(agentic runs only)")
+
     every = add("all", cmd_all, "Graph, review, datasheet and previews in one pass.")
     every.add_argument("--condense-threshold", type=int, default=5,
                        help="collapse sibling datasets above this fan-in "
                             "(default: 5)")
     every.add_argument("--no-review", action="store_true",
                        help="skip the AI-Ready review")
+    every.add_argument("--reference", action="append", default=[], metavar="CRATE",
+                       help="extra crate to resolve ids against (repeatable); "
+                            "constituents and linked crates are always included")
     _datasheet_options(every)
     _review_options(every)
     return parser

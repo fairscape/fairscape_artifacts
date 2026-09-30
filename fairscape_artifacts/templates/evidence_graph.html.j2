@@ -6,6 +6,9 @@
 
 {% block main %}
 <p class="page-note">Outputs on the left, inputs on the right &mdash; click a node for its details.</p>
+{%- if other_crates|default([]) %}
+<p class="page-note">This chain leaves this crate: {% for name, count in other_crates %}<strong>{{ count }}</strong> {{ 'entity' if count == 1 else 'entities' }} described in {{ name }}{{ '; ' if not loop.last else '' }}{% endfor %}.</p>
+{%- endif %}
 <div id="evidence-graph"></div>
 {%- endblock %}
 

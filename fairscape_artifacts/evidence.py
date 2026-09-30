@@ -15,6 +15,11 @@ same algorithm through storage ports. Here the only source is an in-memory
 database. The four near-identical `usedSoftware` / `usedSample` /
 `usedInstrument` / `usedMLModel` branches of the original are one loop.
 
+The node cache spans more than one crate: a reference is a bare `@id`, so an
+entity described in a constituent, in a crate this one links to, or in a
+sibling crate offered as `pool` resolves the same way as one described here,
+and the projected node says which crate it came from.
+
 Beyond the original it understands PROV-converted crates: `prov:Activity`
 and `prov:Entity` nodes with no EVI type still traverse, an activity with no
 `usedDataset` falls back to `prov:used`, and an entity with no `generatedBy`
@@ -27,12 +32,15 @@ detailed domain layer instead of the standardized backbone.
 
 from __future__ import annotations
 
+import os
 import re
-from typing import Any, Dict, List, Optional, Set, Tuple
+import sys
+from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
 from fairscape_artifacts import outputs as io_outputs
 from fairscape_artifacts.condense import condense_cache
 from fairscape_artifacts.crate import (
+    Crate,
     DERIVED_FROM_FIELDS,
     GENERATED_BY_FIELDS,
     PROV_USED_FIELDS,
@@ -147,6 +155,10 @@ class EvidenceGraph:
         self.owner = owner or {}
         #: crate root id -> display name, for the `crate` annotation
         self.crate_names = crate_names or {}
+        #: id -> group id, filled by condensation (see `_redirect`)
+        self._collapsed: Dict[str, str] = {}
+        #: the node cache as it was before condensation removed group members
+        self._before_condense: Dict[str, Node] = {}
 
     @classmethod
     def from_crate(cls, crate, condense_threshold: Optional[int] = 5) -> "EvidenceGraph":
@@ -227,7 +239,20 @@ class EvidenceGraph:
                     nxt |= _referenced_ids(node)
             frontier = nxt
 
-        stats = condense_cache(cache, self.condense_threshold)
+        # Condensation drops the members a group stands in for. Anything
+        # still naming one of them — the crate's outputs, an edge from a node
+        # that survived — is redirected to the group, so a summarized node
+        # never reads as a missing one.
+        self._collapsed = {}
+        # The members a group replaces are dropped from the cache, but the
+        # viewer expands a group *by* them, so keep the pre-condensation
+        # mapping to project them from (see `_project`).
+        self._before_condense = dict(cache)
+        stats = condense_cache(cache, self.condense_threshold,
+                               collapsed_into=self._collapsed)
+        output_refs = self._redirect(output_refs)
+        if start_crate_outputs:
+            start_crate_outputs = self._redirect(start_crate_outputs)
 
         graph_dict: Dict[str, Node] = {}
         for ref in output_refs:
@@ -236,6 +261,27 @@ class EvidenceGraph:
                               start_crate_id, start_crate_outputs)
 
         return graph_dict, output_refs, stats
+
+    def _live(self, node_id: str) -> str:
+        """`node_id`, or the group that replaced it during condensation."""
+        seen = set()
+        while node_id in self._collapsed and node_id not in seen:
+            seen.add(node_id)
+            node_id = self._collapsed[node_id]
+        return node_id
+
+    def _redirect(self, refs: List[Dict[str, str]]) -> List[Dict[str, str]]:
+        """`refs` with collapsed ids swapped for their group, order kept,
+        duplicates dropped — a hundred members become one group reference."""
+        out: List[Dict[str, str]] = []
+        seen: Set[str] = set()
+        for ref in refs:
+            target = self._live(ref.get("@id", ""))
+            if not target or target in seen:
+                continue
+            seen.add(target)
+            out.append({"@id": target})
+        return out
 
     def _project(self, node_id: str, cache: Dict[str, Node],
                  graph: Dict[str, Node], start_crate_id: Optional[str],
@@ -283,11 +329,11 @@ class EvidenceGraph:
             # `generatedBy` if it exists, else `derivedFrom` — never both, so
             # the viewer always has exactly one upstream edge to draw.
             edge, ids = _provenance_refs(node)
-            if edge and ids:
-                result[edge] = ({"@id": ids[0]} if edge == "generatedBy"
-                                else [{"@id": i} for i in ids])
-                for target_id in ids:
-                    recurse(target_id)
+            refs = self._redirect([{"@id": i} for i in ids]) if ids else []
+            if edge and refs:
+                result[edge] = refs[0] if edge == "generatedBy" else refs
+                for ref in refs:
+                    recurse(ref["@id"])
 
         elif kind in _ACTIVITY_TYPES:
             for field in USED_FIELDS:
@@ -297,8 +343,9 @@ class EvidenceGraph:
                        else ref_ids(node, field))
                 if not ids:
                     continue
-                refs = (_expand_used_dataset(ids, cache) if field == "usedDataset"
-                        else [{"@id": i} for i in ids])
+                refs = self._redirect(_expand_used_dataset(ids, cache)
+                                      if field == "usedDataset"
+                                      else [{"@id": i} for i in ids])
                 if refs:
                     result[field] = refs
                     for ref in refs:
@@ -313,45 +360,153 @@ class EvidenceGraph:
                 if field in node:
                     result[field] = node[field]
             for rep_id in ref_ids(node, "evi:representativeDataset"):
+                rep_id = self._live(rep_id)
+                self._inherit_provenance(result, cache.get(rep_id), recurse)
                 recurse(rep_id)
+            self._project_members(node, graph)
+
+
+    def _project_members(self, group: Node, graph: Dict[str, Node]) -> None:
+        """Put the datasets a group replaced back in the graph, as summaries.
+
+        The viewer expands a `DatasetGroup` through `evi:memberIds`: it keeps
+        the ones it can resolve as the group's children, shows them a batch
+        per click with a `contains` edge, and only offers the control at all
+        when at least one resolved (`_childNodeIds.length > 0`). Condensation
+        removes the members from the cache, so nothing resolved and the group
+        was a dead end with no way in.
+
+        They go back without their provenance: the producers only they reached
+        were collapsed with them, the group carries the shape they share, and
+        a member pointing back at its own removed producer would be redirected
+        to the group and close a loop. So each is a leaf the reader can see and
+        identify, which is what a group's members are for.
+        """
+        for member_id in group.get("evi:memberIds") or []:
+            if not isinstance(member_id, str) or member_id in graph:
+                continue
+            member = self._before_condense.get(member_id)
+            if member is None:
+                continue
+            summary: Node = {
+                "@id": member.get("@id", member_id),
+                "@type": member.get("@type"),
+                "name": member.get("name"),
+                "description": member.get("description"),
+            }
+            source = self.owner.get(member_id)
+            if source and self.crate_root_id and source != self.crate_root_id:
+                summary["crate"] = {"@id": source,
+                                    "name": self.crate_names.get(source, source)}
+            graph[member_id] = summary
+
+    def _inherit_provenance(self, result: Node, representative: Optional[Node],
+                            recurse) -> None:
+        """Give a group the upstream edge of the dataset it represents.
+
+        A group asserts that its members share a provenance *structure*, and
+        keeps one of them as the representative under
+        `evi:representativeDataset`. The viewer resolves a fixed set of edge
+        fields — generatedBy, derivedFrom, usedDataset, usedSoftware,
+        usedSample, usedInstrument, usedMLModel, hasOutputs, createdBy — and
+        that is not one of them, so a group would be a dead end and everything
+        upstream of it unreachable: on the cell-atlas crate, the nine nodes
+        from the representative's `cellranger count` back to the BioSample and
+        the sequencer. The viewer bundle is a recovered build that cannot be
+        edited (`static/PROVENANCE.md`), so the edge has to be one it already
+        knows.
+
+        The representative's own edge is the honest choice: every member was
+        made that way, which is exactly what the group claims and what its
+        name already says — "… (and 89 similar)". `evi:representativeDataset`
+        stays on the node for readers of the JSON.
+        """
+        if not representative:
+            return
+        edge, ids = _provenance_refs(representative)
+        refs = self._redirect([{"@id": i} for i in ids]) if ids else []
+        if not edge or not refs or edge in result:
+            return
+        result[edge] = refs[0] if edge == "generatedBy" else refs
+        for ref in refs:
+            recurse(ref["@id"])
 
 
 def build(crate, node_id: Optional[str] = None, *, owner: str = "local",
           condense_threshold: Optional[int] = 5, name: Optional[str] = None,
-          description: Optional[str] = None) -> Dict[str, Any]:
+          description: Optional[str] = None,
+          pool: Optional[Iterable[Any]] = None) -> Dict[str, Any]:
     """Build the evidence graph for `crate`, rooted at the crate itself.
 
     A crate that never had `add-io` run against it has no declared outputs and
     would render as one lonely node, so they are derived in memory first. The
     root is recognized as the crate's root entity, not by its `@type`: a
     PROV-only crate's root is a plain `Dataset`.
+
+    `pool` widens what a reference may resolve to: `Crate` objects or paths to
+    `ro-crate-metadata.json` files that are related to this crate but not
+    pointed at by it. Sibling constituents of a release are the case that
+    needs it — a computation in one crate consumes datasets described in
+    another, and neither crate mentions the other. Without them those
+    references stay dangling; see `Crate.provenance_index`. A path already
+    reached through this crate's own pointers is not loaded twice.
     """
-    index, owners, names = _rooted_index(crate, node_id or crate.root_id)
+    index, owners, names = _rooted_index(crate, node_id or crate.root_id, pool)
     return EvidenceGraph(index, condense_threshold, crate_root_id=crate.root_id,
                          owner=owners, crate_names=names).build(
         node_id or crate.root_id, owner=owner, name=name, description=description)
 
 
-def _linked_index(crate):
-    """`(index, owner, names)`: the crate's nodes plus every linked crate's,
-    the linked copy winning over this crate's stub (see
-    `Crate.provenance_index`); `names` maps crate root ids to display names.
-    A crate built in memory (no path) has nothing to link to."""
+def _pool_crates(crate, pool: Optional[Iterable[Any]]):
+    """`pool` as loaded crates, skipping what the crate already reaches."""
+    if not pool:
+        return []
+    reached = {os.path.abspath(crate.path)} if getattr(crate, "path", None) else set()
+    for sub in crate.crate_closure():
+        if sub.crate.path:
+            reached.add(os.path.abspath(sub.crate.path))
+    out = []
+    for item in pool:
+        if not isinstance(item, str):
+            if getattr(item, "path", None) and os.path.abspath(item.path) in reached:
+                continue
+            out.append(item)
+            continue
+        path = os.path.abspath(item)
+        if path in reached:
+            continue
+        reached.add(path)
+        try:
+            out.append(Crate.load(path))
+        except (OSError, ValueError) as err:
+            print(f"warning: related crate {item!r}: {err}", file=sys.stderr)
+    return out
+
+
+def _linked_index(crate, pool: Optional[Iterable[Any]] = None):
+    """`(index, owner, names)`: the crate's nodes plus those of every crate it
+    reaches — constituents and linked crates — and then `pool` for whatever is
+    still unresolved (see `Crate.provenance_index`). `names` maps crate root
+    ids to display names, which is how the graph labels a node it had to go
+    to another crate for. A crate built in memory (no path) reaches nothing."""
     if getattr(crate, "provenance_index", None) is None:
         return dict(crate.index), {}, {}
-    index, owner = crate.provenance_index()
+    extra = _pool_crates(crate, pool)
+    index, owner = crate.provenance_index(pool=extra)
     names = {crate.root_id: crate.name}
-    for sub in crate.linked_closure():
+    for sub in crate.crate_closure():
         names[sub.crate.root_id] = sub.crate.name
+    for other in extra:
+        names[other.root_id] = other.name
     return index, owner, names
 
 
-def _rooted_index(crate, target: str):
-    """The crate's index (spanning its linked crates), with the root's
-    outputs derived in memory if it is the target and has none recorded.
+def _rooted_index(crate, target: str, pool: Optional[Iterable[Any]] = None):
+    """The crate's index (spanning the crates it reaches, and `pool`), with the
+    root's outputs derived in memory if it is the target and has none recorded.
     The file on disk is never touched, and outputs are derived from this
-    crate's own graph only — what a linked crate produced is its business."""
-    index, owner, names = _linked_index(crate)
+    crate's own graph only — what another crate produced is its business."""
+    index, owner, names = _linked_index(crate, pool)
     if target == crate.root_id and not _rocrate_outputs(crate.root):
         _, derived = io_outputs.ensure(crate)
         if derived:
@@ -466,7 +621,8 @@ class SpecializationView:
 def build_domain(crate, node_id: Optional[str] = None, *, owner: str = "local",
                  condense_threshold: Optional[int] = None,
                  name: Optional[str] = None,
-                 description: Optional[str] = None) -> Dict[str, Any]:
+                 description: Optional[str] = None,
+                 pool: Optional[Iterable[Any]] = None) -> Dict[str, Any]:
     """The domain-layer evidence graph for `crate`, rooted at `node_id`.
 
     The same walk as `build`, run over a `SpecializationView`: backbone
@@ -475,7 +631,7 @@ def build_domain(crate, node_id: Optional[str] = None, *, owner: str = "local",
     defaults to off — the point of the domain layer is seeing the full detail.
     """
     target = node_id or crate.root_id
-    index, owners, names = _rooted_index(crate, target)
+    index, owners, names = _rooted_index(crate, target, pool)
     view = SpecializationView(index)
     graph = EvidenceGraph(view, condense_threshold, crate_root_id=crate.root_id,
                           owner=owners, crate_names=names).build(

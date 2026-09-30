@@ -79,6 +79,23 @@ def preview_html(context: Dict[str, Any]) -> str:
     })
 
 
+def _other_crates(graph: Dict[str, Any]) -> list:
+    """`[(name, node count)]` for crates the graph had to reach into.
+
+    A node the walk found in another crate carries a `crate` annotation (see
+    `evidence.EvidenceGraph._project`). The viewer bundle is a recovered
+    build that cannot be edited, so it ignores the field; naming the crates
+    under the graph is how a reader learns the chain left this one.
+    """
+    counts: Dict[str, int] = {}
+    for node in (graph.get("@graph") or {}).values():
+        if isinstance(node, dict) and isinstance(node.get("crate"), dict):
+            name = str(node["crate"].get("name") or node["crate"].get("@id") or "")
+            if name:
+                counts[name] = counts.get(name, 0) + 1
+    return sorted(counts.items(), key=lambda item: (-item[1], item[0]))
+
+
 def evidence_graph_html(graph: Dict[str, Any], *, title: Optional[str] = None,
                         kicker: str = "Evidence Graph",
                         source: str = "", generated_at: str = "") -> str:
@@ -95,10 +112,24 @@ def evidence_graph_html(graph: Dict[str, Any], *, title: Optional[str] = None,
         "chips": [],
         "source": source,
         "generated_at": generated_at,
+        "other_crates": _other_crates(graph),
         "style_css": Markup(asset("style.css")),
         "reactflow_css": Markup(asset("reactflow.css")),
         "viewer_js": Markup(asset("viewer.js")),
         "graph_json": Markup(json_for_script(graph)),
+    })
+
+
+def interpretation_html(context: Dict[str, Any]) -> str:
+    """Render the interpretation page from an `interpretation.summarize` dict."""
+    return _render("interpretation.html.j2", {
+        **context,
+        "style_css": Markup(asset("style.css") + "\n" + asset("datasheet.css")
+                            + "\n" + asset("interpretation.css")),
+        "viewer_css": Markup(asset("annotated_viewer.css")),
+        "viewer_js": Markup(asset("annotated_viewer.js")),
+        "graph_json": Markup(json_for_script(context.get("graph") or {})),
+        "link_base_json": Markup(json_for_script(context.get("link_base") or "")),
     })
 
 

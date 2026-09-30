@@ -49,13 +49,16 @@
   <a href="{{ entry.href }}">{{ entry.label }}</a>
   {%- endif %}
   {%- endfor %}
-  {%- if links.evidence_graph or links.review_html %}
+  {%- if links.evidence_graph or links.review_html or links.interpretation_html %}
   <div class="sidebar-title">Companion pages</div>
   {%- if links.evidence_graph %}
   <a class="ext" href="{{ links.evidence_graph }}">Evidence graph &#8599;</a>
   {%- endif %}
   {%- if links.review_html %}
   <a class="ext" href="{{ links.review_html }}">AI-Ready review page &#8599;</a>
+  {%- endif %}
+  {%- if links.interpretation_html %}
+  <a class="ext" href="{{ links.interpretation_html }}">AI interpretation &#8599;</a>
   {%- endif %}
   {%- endif %}
 </nav>
@@ -82,13 +85,16 @@
       {%- if summary.formats %}
       <p class="formats"><span class="stat-sub">Formats</span> {% for fmt in summary.formats %}<span class="tag">{{ fmt }}</span> {% endfor %}{% if summary.formats_more %}<span class="tag muted">+{{ summary.formats_more }} more</span>{% endif %}</p>
       {%- endif %}
-      {%- if summary.access_href or links.evidence_graph %}
+      {%- if summary.access_href or links.evidence_graph or links.interpretation_html %}
       <p class="actions">
         {%- if summary.access_href %}
         <a class="btn" href="{{ summary.access_href }}" target="_blank" rel="noopener">Access data</a>
         {%- endif %}
         {%- if links.evidence_graph %}
         <a class="btn ghost" href="{{ links.evidence_graph }}">Evidence graph</a>
+        {%- endif %}
+        {%- if links.interpretation_html %}
+        <a class="btn ghost" href="{{ links.interpretation_html }}">AI interpretation</a>
         {%- endif %}
       </p>
       {%- endif %}
