@@ -73,12 +73,13 @@ def signature(dataset_id: str, index: Dict[str, Node],
                 comp_sigs.append(((), ()))
                 continue
             software = tuple(sorted(ref_ids(comp, "usedSoftware")))
+            # repr key: signatures mix None and tuples in the last slot
             inputs = tuple(sorted(
-                signature(ds_id, index, cache)
-                for ds_id in used_dataset_ids(comp)
+                (signature(ds_id, index, cache)
+                 for ds_id in used_dataset_ids(comp)), key=repr
             ))
             comp_sigs.append((software, inputs))
-        sig = (fmt, schema_ids, tuple(sorted(comp_sigs)))
+        sig = (fmt, schema_ids, tuple(sorted(comp_sigs, key=repr)))
 
     cache[dataset_id] = sig
     return sig
