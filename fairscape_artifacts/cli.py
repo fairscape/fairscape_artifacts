@@ -36,7 +36,7 @@ from fairscape_artifacts import interpretation as interpretation_mod
 from fairscape_artifacts import inverses as inverses_mod
 from fairscape_artifacts import preview as preview_mod
 from fairscape_artifacts import render
-from fairscape_artifacts.crate import METADATA_FILENAME, Crate
+from fairscape_artifacts.crate import METADATA_FILENAME, Crate, ref_ids
 
 DATASHEET_HTML = "ro-crate-datasheet.html"
 PREVIEW_HTML = composition_mod.PREVIEW_HTML
@@ -98,21 +98,41 @@ def _load_review(crate_dir: str, out_dir: str, args) -> Optional[Dict[str, Any]]
         return None
 
 
-def _links(out_dir: str) -> Dict[str, str]:
-    """Companion pages the datasheet may link to, if they exist beside it."""
-    return {key: name if os.path.exists(os.path.join(out_dir, name)) else ""
+def _links(out_dir: str, page_dir: Optional[str] = None) -> Dict[str, str]:
+    """Companion pages in `out_dir` the datasheet may link to, if they
+    exist, relative to where the datasheet is written (`page_dir`)."""
+    page_dir = page_dir or out_dir
+    return {key: _rel(os.path.join(out_dir, name), page_dir)
+            if os.path.exists(os.path.join(out_dir, name)) else ""
             for key, name in (("evidence_graph", GRAPH_HTML), ("graph_json", GRAPH_JSON),
                               ("review_html", REVIEW_HTML), ("review_json", REVIEW_JSON),
                               ("interpretation_html", INTERPRETATION_HTML),
                               ("interpretation_json", INTERPRETATION_JSON))}
 
 
+def _hint_unresolved(crate, graph: Dict[str, Any]) -> None:
+    """Say why a constituent built on its own has dangling ids, and what to
+    do about it, rather than leaving a reader with "not found" nodes."""
+    missing = [k for k, v in graph.get("@graph", {}).items()
+               if isinstance(v, dict) and v.get("error")]
+    parents = [p for p in ref_ids(crate.root, "isPartOf") if p != crate.root_id]
+    if not missing or not parents:
+        return
+    noun = "id is" if len(missing) == 1 else "ids are"
+    print(f"note: {len(missing)} referenced {noun} not described in this crate or the "
+          f"crates it points at. It is part of {', '.join(parents)}: build from that "
+          f"release, or pass --reference <sibling crate> for each crate that "
+          f"describes them.", file=sys.stderr)
+
+
 def _rel(target: str, start_dir: str) -> str:
     return os.path.relpath(target, start_dir).replace(os.sep, "/")
 
 
-def _write_previews(comp, out_dir: str, path: str, link_base: str) -> List[str]:
+def _write_previews(comp, out_dir: str, path: str, link_base: str,
+                    datasheet_path: Optional[str] = None) -> List[str]:
     """One `ro-crate-preview.html` per composition card, beside its crate."""
+    datasheet_path = datasheet_path or os.path.join(out_dir, DATASHEET_HTML)
     written = []
     for item in comp.items:
         if not item.preview_path:
@@ -122,8 +142,8 @@ def _write_previews(comp, out_dir: str, path: str, link_base: str) -> List[str]:
         if evidence_href and not evidence_href.startswith(("http://", "https://")):
             evidence_href = _rel(os.path.join(out_dir, evidence_href), preview_dir)
         context = preview_mod.build_context(
-            item.crate, comp.index, comp.owner, link_base=link_base,
-            datasheet_href=_rel(os.path.join(out_dir, DATASHEET_HTML), preview_dir),
+            item.crate, comp.index, comp.owner, names=comp.names, link_base=link_base,
+            datasheet_href=_rel(datasheet_path, preview_dir),
             evidence_href=evidence_href,
             source=os.path.basename(item.crate.path or path), generated_at=_stamp())
         written.append(render.write(item.preview_path, render.preview_html(context)))
@@ -138,14 +158,16 @@ def cmd_datasheet(args) -> List[str]:
     out_dir = _out_dir(path, args.output_dir)
     review = None if args.no_review else _load_review(
         os.path.dirname(os.path.abspath(path)), out_dir, args)
+    target = os.path.abspath(args.output or os.path.join(out_dir, DATASHEET_HTML))
+    page_dir = os.path.dirname(target)
     comp = composition_mod.build(crate, out_dir=out_dir, link_base=args.link_base,
-                                 previews=not args.no_previews)
+                                 previews=not args.no_previews, page_dir=page_dir)
     context = datasheet_mod.build_context(crate, composition=comp, review=review,
-                                          generated_at=_stamp(), links=_links(out_dir),
+                                          generated_at=_stamp(),
+                                          links=_links(out_dir, page_dir),
                                           link_base=args.link_base)
-    target = args.output or os.path.join(out_dir, DATASHEET_HTML)
     written = [render.write(target, render.datasheet_html(context))]
-    written += _write_previews(comp, out_dir, path, args.link_base)
+    written += _write_previews(comp, out_dir, path, args.link_base, datasheet_path=target)
     return written
 
 
@@ -165,6 +187,7 @@ def cmd_evidence_graph(args) -> List[str]:
                                    condense_threshold=5 if threshold is None
                                    else threshold, pool=pool)
 
+    _hint_unresolved(crate, graph)
     html_name, json_name = ((GRAPH_DOMAIN_HTML, GRAPH_DOMAIN_JSON) if args.domain
                             else (GRAPH_HTML, GRAPH_JSON))
     written = []
@@ -172,7 +195,10 @@ def cmd_evidence_graph(args) -> List[str]:
     written.append(render.write(target, render.evidence_graph_html(
         graph, source=os.path.basename(path), generated_at=_stamp())))
     if not args.no_json:
-        written.append(_write_json(os.path.join(out_dir, json_name), graph))
+        # the JSON sidecar goes wherever the page went
+        json_path = (os.path.splitext(args.output)[0] + ".json" if args.output
+                     else os.path.join(out_dir, json_name))
+        written.append(_write_json(json_path, graph))
     return written
 
 
@@ -186,7 +212,9 @@ def cmd_review(args) -> List[str]:
     written = [_write_json(args.output or os.path.join(out_dir, REVIEW_JSON),
                            presentation)]
     if not args.no_html:
-        link_base = os.path.relpath(crate_dir, out_dir).replace(os.sep, "/")
+        # crate files are linked as if the output sat at the crate root
+        # (see `composition._href`), never back to the build machine's path
+        link_base = ""
         written.append(render.write(
             os.path.join(out_dir, REVIEW_HTML),
             grading.review_html(presentation, link_base=link_base)))
@@ -315,6 +343,7 @@ def cmd_all(args) -> List[str]:
 
     graph = evidence_mod.build(crate, condense_threshold=args.condense_threshold,
                                pool=list(getattr(args, "reference", []) or []))
+    _hint_unresolved(crate, graph)
     written.append(render.write(
         os.path.join(out_dir, GRAPH_HTML),
         render.evidence_graph_html(graph, source=os.path.basename(path),
@@ -340,10 +369,9 @@ def cmd_all(args) -> List[str]:
             presentation = grading.review(crate_dir, network=args.network,
                                           progress=_progress(args.quiet))
             written.append(_write_json(os.path.join(out_dir, REVIEW_JSON), presentation))
-            link_base = os.path.relpath(crate_dir, out_dir).replace(os.sep, "/")
             written.append(render.write(
                 os.path.join(out_dir, REVIEW_HTML),
-                grading.review_html(presentation, link_base=link_base)))
+                grading.review_html(presentation, link_base="")))
         except grading.GraderUnavailable as err:
             print(f"warning: {err}; skipping the AI-Ready review", file=sys.stderr)
 
@@ -362,13 +390,19 @@ def build_parser() -> argparse.ArgumentParser:
                     "from a local RO-Crate.")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    def add(name, handler, help_text):
+    def add(name, handler, help_text, output=True, output_dir=True):
+        """A subcommand; `-o` / `-d` only where the command honours them, so
+        an option that would be silently ignored is an error instead."""
         sub = subparsers.add_parser(name, help=help_text, description=help_text)
         sub.add_argument("crate", help="RO-Crate directory or ro-crate-metadata.json")
-        sub.add_argument("-o", "--output", help="explicit output file path")
-        sub.add_argument("-d", "--output-dir",
-                         help="directory for outputs (default: beside the crate)")
-        sub.set_defaults(handler=handler)
+        if output:
+            sub.add_argument("-o", "--output", help="explicit output file path")
+        if output_dir:
+            sub.add_argument("-d", "--output-dir",
+                             help="directory for outputs (default: beside the crate); "
+                                  "links to the crate's own files are written as if "
+                                  "this directory sat at the crate root")
+        sub.set_defaults(handler=handler, output=None, output_dir=None)
         return sub
 
     sheet = add("datasheet", cmd_datasheet,
@@ -407,11 +441,12 @@ def build_parser() -> argparse.ArgumentParser:
     _review_options(review)
 
     add("add-io", cmd_add_io,
-        "Write EVI:inputs / EVI:outputs onto the crate root (modifies the crate).")
+        "Write EVI:inputs / EVI:outputs onto the crate root (modifies the crate).",
+        output=False, output_dir=False)
 
     add("link-inverses", cmd_link_inverses,
         "Complete the inverse EVI links (generated for generatedBy, and so on) "
-        "on every entity (modifies the crate).")
+        "on every entity (modifies the crate).", output=False, output_dir=False)
 
     interp = add("interpret", cmd_interpret,
                  "Interpret the crate with an LLM: annotated evidence graph "
@@ -452,7 +487,8 @@ def build_parser() -> argparse.ArgumentParser:
                         help="what the interpretation records as its model "
                              "(agentic runs only)")
 
-    every = add("all", cmd_all, "Graph, review, datasheet and previews in one pass.")
+    every = add("all", cmd_all, "Graph, review, datasheet and previews in one pass.",
+                output=False)
     every.add_argument("--condense-threshold", type=int, default=5,
                        help="collapse sibling datasets above this fan-in "
                             "(default: 5)")

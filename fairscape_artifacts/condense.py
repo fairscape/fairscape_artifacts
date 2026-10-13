@@ -18,6 +18,8 @@ reading prefers and the viewer draws.
 
 from __future__ import annotations
 
+import hashlib
+import re
 from collections import defaultdict
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -104,25 +106,65 @@ def _backward_chain(dataset_id: str, index: Dict[str, Node]) -> set:
     return visited
 
 
-def _collect_exclusive(dataset_id: str, representative_id: str,
-                       index: Dict[str, Node], collapsed: set) -> None:
-    """Mark a member's ancestors for removal, minus anything the
-    representative also depends on — that part of the graph must survive."""
+_OUTPUT_FIELDS = ("https://w3id.org/EVI#outputs", "EVI:outputs", "outputs")
+
+
+def _dependents(index: Dict[str, Node]) -> Dict[str, set]:
+    """id -> the ids that point at it: the computations that used it, the
+    datasets it generated, and any crate that lists it as an output."""
+    out: Dict[str, set] = defaultdict(set)
+    for node_id, node in index.items():
+        if is_computation(node):
+            for used in used_dataset_ids(node) + ref_ids(node, "usedSoftware", "usedMLModel"):
+                out[used].add(node_id)
+        elif is_rocrate(node):
+            for produced in ref_ids(node, *_OUTPUT_FIELDS):
+                out[produced].add(node_id)
+        elif is_dataset(node):
+            for producer in generated_by_ids(node):
+                out[producer].add(node_id)
+    return out
+
+
+def _collect_exclusive(member_ids: List[str], representative_id: str,
+                       index: Dict[str, Node], dependents: Dict[str, set],
+                       collapsed: set) -> set:
+    """The non-representative members and the ancestors only they reach.
+
+    An ancestor is removed only when everything that points at it is going
+    too: an input the representative also depends on stays, and so does one
+    that something outside the group still uses — dropping it would leave
+    that consumer pointing at the group, which is a false edge.
+    """
     keep = _backward_chain(representative_id, index)
-    stack, visited = [dataset_id], set()
+    members = set(member_ids)
+    candidates: set = set()
+    stack = [p for m in members if m != representative_id
+             for p in generated_by_ids(index.get(m) or {})]
     while stack:
         current = stack.pop()
-        if current in visited or current in keep:
+        if current in candidates or current in keep or current in members:
             continue
-        visited.add(current)
         node = index.get(current)
         if node is None or is_software(node):
             continue
-        collapsed.add(current)
+        candidates.add(current)
         if is_dataset(node):
             stack.extend(generated_by_ids(node))
         if is_computation(node):
             stack.extend(used_dataset_ids(node))
+
+    # Prune to a fixed point: a candidate still used by a survivor survives,
+    # and so then does whatever it in turn depends on.
+    changed = True
+    while changed:
+        changed = False
+        for current in list(candidates):
+            if any(d not in candidates and d not in members and d not in collapsed
+                   for d in dependents.get(current, ())):
+                candidates.discard(current)
+                changed = True
+    return candidates | (members - {representative_id})
 
 
 def _group_node(consuming_id: str, sig: Signature, member_ids: List[str],
@@ -141,12 +183,16 @@ def _group_node(consuming_id: str, sig: Signature, member_ids: List[str],
     software_ids = sorted(set(software_ids))
 
     consuming = index.get(consuming_id, {})
-    label = str(consuming.get("name", "unknown")).lower().replace(" ", "-")
+    # Keyed by the consumer's @id, not its name (every `cellranger count` run
+    # shares one), plus a digest of the signature, since one consumer can
+    # have several groups of the same format.
+    label = re.sub(r"[^A-Za-z0-9._-]+", "-", re.sub(r"^ark:/?", "", consuming_id)).strip("-").lower()
     slug = str(fmt).replace("/", "_").lstrip(".")
+    digest = hashlib.sha1(repr(sig).encode("utf-8")).hexdigest()[:8]
     # A group hanging off the crate root is that crate's outputs; anywhere
     # else it is the consuming computation's inputs.
     side = "outputs" if is_rocrate(consuming) else "inputs"
-    group_id = f"ark:group/{label}-{slug}-{side}"
+    group_id = f"ark:group/{label}-{slug}-{digest}-{side}"
 
     software_names = [index.get(sid, {}).get("name", sid) for sid in software_ids]
     description = f"{count} {fmt} files with identical provenance structure."
@@ -208,6 +254,7 @@ def condense_cache(node_cache: Dict[str, Node], threshold: Optional[int] = 5,
             "datasetGroupCount": 0,
         }
     sig_cache: Dict[str, Signature] = {}
+    dependents = _dependents(node_cache)
     groups: List[Node] = []
     collapsed: set = set()
 
@@ -234,9 +281,8 @@ def condense_cache(node_cache: Dict[str, Node], threshold: Optional[int] = 5,
 
             representative_id = sorted(member_ids)[0]
             before = set(collapsed)
-            for member_id in member_ids:
-                if member_id != representative_id:
-                    _collect_exclusive(member_id, representative_id, node_cache, collapsed)
+            collapsed |= _collect_exclusive(member_ids, representative_id,
+                                            node_cache, dependents, collapsed)
 
             group = _group_node(comp_id, sig, member_ids, representative_id,
                                 node_cache, max_member_ids)

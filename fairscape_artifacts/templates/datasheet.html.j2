@@ -288,7 +288,7 @@
         {{ pair('Version', item.version, '', true) }}
         {{ pair('Size', item.size, '', true) }}
         {{ pair('Publisher', item.publisher) }}
-        {{ pair('DOI', item.doi, item.doi_href) }}
+        {{ pair(item.identifier_label, item.doi, item.doi_href) }}
         {%- if item.license %}{{ pair('License', item.license, item.license_href) }}{% else %}
         <div><div class="label">License</div><div class="value"><span class="missing">Not specified</span></div></div>
         {%- endif %}
@@ -356,6 +356,9 @@
           <div class="srow"><b>Other</b> {{ d.other }}</div>
         </div>
       </div>
+      {%- for note in item.notes %}
+      <p class="muted">{{ note }}</p>
+      {%- endfor %}
       {%- if item.preview_href %}
       <p class="view-full"><a class="btn" href="{{ item.preview_href }}">View full dataset details</a></p>
       {%- endif %}

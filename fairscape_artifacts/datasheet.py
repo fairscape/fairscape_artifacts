@@ -126,16 +126,16 @@ def _prop(root: Dict[str, Any], field: str, *ap_names: str) -> str:
 
 def badges(crate: Crate, link_base: str) -> List[Dict[str, str]]:
     root = crate.root
-    doi = f.first(root, "identifier")
+    id_label, id_text, id_href = f.identifier(root.get("identifier"), link_base)
     out = []
     version = f.first(root, "version")
     if version:
         out.append({"label": f"Version {version}", "href": "", "title": ""})
-    if doi:
-        out.append({"label": "DOI", "href": f.doi_href(doi), "title": doi})
+    if id_text:
+        out.append({"label": id_label, "href": id_href, "title": id_text})
     license_ = f.first(root, "license")
     if license_:
-        out.append({"label": "License", "href": f.http_url(license_), "title": license_})
+        out.append({"label": "License", "href": f.http_url(root.get("license")), "title": license_})
     size = f.human_size(root.get("contentSize")) or f.human_size(root.get("evi:totalContentSizeBytes"))
     if size:
         out.append({"label": size, "href": "", "title": ""})
@@ -165,17 +165,23 @@ def summary(crate: Crate, comp: Composition) -> Dict[str, Any]:
     else:
         format_counter: Counter = Counter()
         entities = 0
-        for member in comp.crates:
-            for node in composition_mod._entities(member):
-                kind = f.bucket(node)
-                if kind == "rocrate":
-                    continue
-                entities += 1
-                counts[kind] += 1
-                if kind == "dataset":
-                    format_counter.update(f.formats_of(node))
-                if kind in ("dataset", "mlmodel"):
-                    size_total += f.size_bytes(node.get("contentSize")) or 0
+        nodes = [n for member in comp.crates for n in composition_mod._entities(member)]
+        if comp.is_release:
+            # Entities described on the release root itself, not in any
+            # constituent (a top-level README, say), count too.
+            described = {n.get("@id") for n in nodes}
+            nodes += [n for n in composition_mod._entities(crate)
+                      if n.get("@id") not in described]
+        for node in nodes:
+            kind = f.bucket(node)
+            if kind == "rocrate":
+                continue
+            entities += 1
+            counts[kind] += 1
+            if kind == "dataset":
+                format_counter.update(f.formats_of(node))
+            if kind in ("dataset", "mlmodel"):
+                size_total += f.size_bytes(node.get("contentSize")) or 0
         formats = [label for label, _ in format_counter.most_common()]
 
     size = (f.human_size(root.get("contentSize"))
@@ -276,13 +282,14 @@ def linked_crate_items(crate: Crate) -> List[Dict[str, str]]:
 
 def overview(crate: Crate, index, link_base: str) -> List[Dict[str, Any]]:
     root = crate.root
-    doi = f.first(root, "identifier")
+    id_label, id_text, id_href = f.identifier(root.get("identifier"), link_base)
+    publisher = f.resolved(root.get("publisher"), index)
     citation = f.publications(root.get("citation"))
     publications = f.publications(root.get("associatedPublication"))
     rows = [
         row("RO-Crate ID", crate.root_id, id="accession", kind="mono",
             href=f.ark_href(crate.root_id, link_base)),
-        row("DOI", doi, id="doi", kind="link", href=f.doi_href(doi), missing=NOT_SPECIFIED),
+        row(id_label or "DOI", id_text, id="doi", kind="link", href=id_href, missing=NOT_SPECIFIED),
         row("Release Date", f.first(root, "datePublished"), id="release-date"),
         row("Date Created", f.first(root, "dateCreated"), id="date-created"),
         row("Date Modified", f.first(root, "dateModified"), id="date-modified"),
@@ -291,8 +298,8 @@ def overview(crate: Crate, index, link_base: str) -> List[Dict[str, Any]]:
             or f.human_size(root.get("evi:totalContentSizeBytes")), id="content-size", kind="mono"),
         row("Description", f.first(root, "description"), id="description"),
         row("Authors", ", ".join(resolve_authors(root, index)), id="authors"),
-        row("Publisher", f.first(root, "publisher"), id="publisher",
-            kind="link", href=f.http_url(root.get("publisher"))),
+        row("Publisher", f.text(publisher), id="publisher",
+            kind="link", href=f.http_url(publisher)),
         row("Principal Investigator", f.first(root, "principalInvestigator"),
             id="principal-investigator"),
         row("Contact Email", f.first(root, "contactEmail"), id="contact-email",
@@ -330,7 +337,7 @@ def regulatory(crate: Crate) -> Dict[str, Any]:
     """The human-subjects block. Absent fields say so rather than assuming a
     reassuring default."""
     root = crate.root
-    irb = root.get("irb")
+    irb = f.resolved(root.get("irb"), crate.index)
     if not isinstance(irb, dict):
         irb = f.first(root, "irb") or f.additional_property(root, "IRB")
     fields = {
@@ -368,15 +375,15 @@ def use_cases(crate: Crate) -> List[Dict[str, Any]]:
     return rows
 
 
-def distribution(crate: Crate) -> List[Dict[str, Any]]:
+def distribution(crate: Crate, link_base: str = "") -> List[Dict[str, Any]]:
     root = crate.root
-    doi = f.first(root, "identifier")
+    id_label, id_text, id_href = f.identifier(root.get("identifier"), link_base)
+    publisher = f.resolved(root.get("publisher"), crate.index)
     rows = [
-        row("Publisher", f.first(root, "publisher"), kind="link",
-            href=f.http_url(root.get("publisher"))),
+        row("Publisher", f.text(publisher), kind="link", href=f.http_url(publisher)),
         row("License", f.first(root, "license"), kind="link",
             href=f.http_url(root.get("license")), missing=NOT_SPECIFIED),
-        row("DOI", doi, kind="link", href=f.doi_href(doi)),
+        row(id_label, id_text, kind="link", href=id_href),
         row("Release Date", f.first(root, "datePublished")),
         row("Version", f.first(root, "version"), kind="mono"),
         row("Access", f.http_url(root.get("contentUrl")) or f.http_url(root.get("url")),
@@ -440,7 +447,7 @@ def build_context(crate: Crate, *, composition: Optional[Composition] = None,
             "is_release": composition.is_release,
             "show_index": len(composition.items) > 1,
         },
-        "distribution": distribution(crate),
+        "distribution": distribution(crate, link_base),
         "links": links,
         "entity_total": len([n for n in crate.graph if n.get("@id") != METADATA_FILENAME]),
         "source": os.path.basename(crate.path) if crate.path else "",
