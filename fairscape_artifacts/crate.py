@@ -13,6 +13,7 @@ import os
 import sys
 from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List, Optional, Tuple
+from urllib.parse import unquote
 
 METADATA_FILENAME = "ro-crate-metadata.json"
 
@@ -212,7 +213,11 @@ class Crate:
             except (OSError, ValueError) as e:
                 err = err or e
                 continue
-            return SubCrate(stub=stub, crate=sub, metadata_path=rel)
+            # Record the file that actually loaded, not the pointer: a
+            # pointer may name a directory, or be the one that failed before
+            # `localPath` resolved, and every link is formed from this path.
+            loaded = os.path.relpath(sub.path, self.dir).replace(os.sep, "/")
+            return SubCrate(stub=stub, crate=sub, metadata_path=loaded)
         print(f"warning: {kind} {stub.get('@id', rel)!r}: {err}", file=sys.stderr)
         return None
 
@@ -320,6 +325,8 @@ class Crate:
             for nid, node in sub.crate.index.items():
                 if nid == METADATA_FILENAME or nid == self.root_id:
                     continue
+                if nid in index and not replaces(index[nid], node):
+                    continue
                 index[nid] = node
                 owner[nid] = sub.crate.root_id
         for crate in pool:
@@ -349,7 +356,8 @@ class Crate:
         Crates in this corpus write `contentUrl` as `file:///<path>` where the
         path is relative to the crate directory, so the scheme is stripped and
         the remainder joined against `self.dir` rather than treated as
-        absolute.
+        absolute. Percent-encoding is decoded; a path that would land outside
+        the crate directory doesn't resolve.
         """
         url = node.get("contentUrl")
         if not isinstance(url, str) or not self.dir:
@@ -359,13 +367,35 @@ class Crate:
             relative = relative[len("file://"):]
         if not relative or "://" in relative:
             return None
-        return os.path.normpath(os.path.join(self.dir, relative.lstrip("/")))
+        relative = unquote(relative)
+        path = os.path.normpath(os.path.join(self.dir, relative.lstrip("/")))
+        # A `../` path naming something outside the crate is not one of its
+        # files, and linking to it would point a page at the host filesystem.
+        if os.path.commonpath([path, os.path.normpath(self.dir)]) != os.path.normpath(self.dir):
+            return None
+        return path
 
     def __len__(self) -> int:
         return len(self.graph)
 
     def __repr__(self) -> str:
         return f"<Crate {self.root_id!r} nodes={len(self.graph)}>"
+
+
+def has_provenance(node: Dict[str, Any]) -> bool:
+    """Whether a node says where it came from or what it used — the part a
+    bare copy or a stub of it leaves out."""
+    if node.get(SUBCRATE_PATH_FIELD):
+        return False
+    fields = (GENERATED_BY_FIELDS + DERIVED_FROM_FIELDS + USED_FIELDS + PROV_USED_FIELDS)
+    return any(ref_ids(node, field) for field in fields)
+
+
+def replaces(existing: Dict[str, Any], candidate: Dict[str, Any]) -> bool:
+    """When several crates describe one id, should `candidate` replace the
+    copy already indexed? Yes, unless only the existing copy carries
+    provenance."""
+    return has_provenance(candidate) or not has_provenance(existing)
 
 
 # ---------------------------------------------------------------------------

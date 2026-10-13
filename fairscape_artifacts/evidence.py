@@ -112,21 +112,39 @@ def _referenced_ids(node: Node) -> Set[str]:
     return set()
 
 
-def _expand_used_dataset(dataset_ids: List[str],
-                         cache: Dict[str, Node]) -> List[Dict[str, str]]:
+def _crate_output_ids(crate_node: Node, index) -> List[str]:
+    """What a nested crate produced: its declared outputs, else the outputs
+    `add-io` would derive from the parts it lists."""
+    declared = [r["@id"] for r in _rocrate_outputs(crate_node)
+                if isinstance(r, dict) and r.get("@id")]
+    if declared:
+        return declared
+    members = [index.get(i) for i in ref_ids(crate_node, "hasPart")]
+    members = [m for m in members if m is not None and not is_rocrate(m)]
+    if not members:
+        return []
+    _, derived = io_outputs.calculate(members)
+    return [r["@id"] for r in derived]
+
+
+def _expand_used_dataset(dataset_ids: List[str], index) -> List[Dict[str, str]]:
     """Resolve a computation's consumed datasets, unwrapping nested crates.
 
     Pointing at a whole RO-Crate means "everything that crate produced", so it
-    is replaced by that crate's outputs. A crate with no declared outputs, and
-    any id that didn't resolve, is kept as-is.
+    is replaced by that crate's outputs (see `_crate_output_ids`). A crate with
+    no outputs, declared or derivable, and any id that didn't resolve, is kept
+    as-is.
+
+    `index` is the full node index, not the walk's cache: the nested crate's
+    outputs are what the walk is about to visit, so they aren't cached yet.
     """
     refs: List[Dict[str, str]] = []
     for dataset_id in dataset_ids:
-        target = cache.get(dataset_id)
-        if target and "error" not in target and is_rocrate(target):
-            nested = [r for r in _rocrate_outputs(target) if r.get("@id")]
-            refs.extend({"@id": r["@id"]} for r in nested) if nested else \
-                refs.append({"@id": dataset_id})
+        target = index.get(dataset_id)
+        nested = (_crate_output_ids(target, index)
+                  if target and "error" not in target and is_rocrate(target) else [])
+        if nested:
+            refs.extend({"@id": i} for i in nested)
         else:
             refs.append({"@id": dataset_id})
     return refs
@@ -236,6 +254,8 @@ class EvidenceGraph:
                 seen.add(node_id)
                 node = cache.get(node_id)
                 if node and "error" not in node:
+                    if evi_type(node) in _ACTIVITY_TYPES:
+                        self._unwrap_crates(node)
                     nxt |= _referenced_ids(node)
             frontier = nxt
 
@@ -261,6 +281,15 @@ class EvidenceGraph:
                               start_crate_id, start_crate_outputs)
 
         return graph_dict, output_refs, stats
+
+    def _unwrap_crates(self, activity: Node) -> None:
+        """Swap a used RO-Crate for its outputs on the walk's copy of
+        `activity`, so the walk visits those outputs and condensation and
+        projection see them as ordinary inputs."""
+        ids = used_dataset_ids(activity)
+        if not any(is_rocrate(self.cache.get(i) or {}) for i in ids):
+            return
+        activity["usedDataset"] = _expand_used_dataset(ids, self.cache)
 
     def _live(self, node_id: str) -> str:
         """`node_id`, or the group that replaced it during condensation."""
@@ -343,9 +372,7 @@ class EvidenceGraph:
                        else ref_ids(node, field))
                 if not ids:
                     continue
-                refs = self._redirect(_expand_used_dataset(ids, cache)
-                                      if field == "usedDataset"
-                                      else [{"@id": i} for i in ids])
+                refs = self._redirect([{"@id": i} for i in ids])
                 if refs:
                     result[field] = refs
                     for ref in refs:

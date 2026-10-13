@@ -25,7 +25,7 @@ Type matching follows the original too, which is looser for datasets
 load-bearing: a root typed `[..., "ROCrate"]` must not be collected as a
 dataset, or the crate lists itself among its own outputs.
 
-Two additions on top of the original, both of which only ever fire where the
+Additions on top of the original. The first two only ever fire where the
 original found nothing, so an EVI crate derives exactly what it always did:
 
 * **PROV-only crates.** A crate carrying no EVI vocabulary at all spells its
@@ -37,6 +37,14 @@ original found nothing, so an EVI crate derives exactly what it always did:
   typed `[..., "ROCrate"]` to keep it out of the dataset scan. A PROV-only
   crate's root is a plain `Dataset`, so the root named by the metadata
   descriptor's `about` is skipped explicitly.
+
+And two that correct the original (bugs.md E4):
+
+* **Every activity consumes.** A dataset read only by an `Annotation` or an
+  `Experiment` is used, not a leaf output.
+* **Derivation counts.** A dataset with `derivedFrom` and no `generatedBy`
+  came from something in the crate, so it is not an input, and what it was
+  derived from is used.
 """
 
 from __future__ import annotations
@@ -47,6 +55,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from fairscape_artifacts.crate import (
     METADATA_FILENAME,
+    derived_from_ids,
     evi_type,
     generated_by_ids,
     ref_ids,
@@ -110,12 +119,17 @@ def calculate(graph: Sequence[Dict[str, Any]]) -> Tuple[List[Ref], List[Ref]]:
                 "Dataset" in etype or kind in ("Dataset", "MLModel")):
             if entity_id not in datasets:
                 order.append(entity_id)
-            datasets[entity_id] = bool(generated_by_ids(entity))
+            # Derived-only (no generating activity) still came from
+            # something in the crate, so it isn't an input either.
+            datasets[entity_id] = bool(generated_by_ids(entity) or derived_from_ids(entity))
+            used.update(derived_from_ids(entity))
 
         if etype in _SAMPLE_TYPES and entity_id:
             samples.append(entity_id)
 
-        if etype in _COMPUTATION_TYPES or kind == "Computation":
+        # Any activity consumes: a dataset only an Annotation or Experiment
+        # read is not a leaf output.
+        if etype in _COMPUTATION_TYPES or kind in ("Computation", "Annotation", "Experiment"):
             for consumed_id in used_dataset_ids(entity):
                 used.add(consumed_id)
             for consumed_id in ref_ids(entity, "usedMLModel"):
@@ -169,15 +183,30 @@ def ensure(crate) -> Tuple[List[Ref], List[Ref]]:
     file on disk — `write` is the only thing that persists.
     """
     inputs, outputs = stored(crate.root)
-    if outputs:
+    if outputs and inputs:
         return inputs, outputs
-    return calculate(crate.graph)
+    derived_inputs, derived_outputs = calculate(crate.graph)
+    # Stored outputs with no stored inputs: keep what was stored, derive the
+    # rest, rather than reporting a crate with no inputs at all.
+    return inputs or derived_inputs, outputs or derived_outputs
+
+
+def _replace(root: Dict[str, Any], spellings: Sequence[str], value: List[Ref]) -> None:
+    """Set one field under a single spelling: the one the crate already
+    used, else the full IRI. Every other spelling is dropped, so a re-run
+    never leaves a stale list beside the new one."""
+    present = [field for field in spellings if field in root]
+    keep = present[0] if present else spellings[0]
+    for field in present[1:]:
+        root.pop(field)
+    root[keep] = value
 
 
 def write(path: str) -> Tuple[bool, str]:
     """Persist `EVI:inputs` / `EVI:outputs` onto the crate's root entity.
 
-    Rewrites only those two fields; everything else in the file is preserved
+    Rewrites only those two fields, replacing any spelling already there;
+    everything else in the file is preserved
     as parsed, unlike the old CLI which also pruned every null in the
     document on its way out.
     """
@@ -195,10 +224,10 @@ def write(path: str) -> Tuple[bool, str]:
         return False, "Could not find root entity in RO-Crate"
 
     inputs, outputs = calculate(crate.graph)
-    crate.root[EVI_INPUTS] = inputs
-    crate.root[EVI_OUTPUTS] = outputs
+    _replace(crate.root, (EVI_INPUTS, "EVI:inputs", "inputs"), inputs)
+    _replace(crate.root, (EVI_OUTPUTS, "EVI:outputs", "outputs"), outputs)
 
     with open(path, "w", encoding="utf-8") as handle:
-        json.dump(crate.data, handle, indent=2)
+        json.dump(crate.data, handle, indent=2, ensure_ascii=False)
 
     return True, f"Added {len(inputs)} inputs and {len(outputs)} outputs to {path}"

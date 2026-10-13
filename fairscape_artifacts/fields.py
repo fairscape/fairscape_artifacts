@@ -136,8 +136,10 @@ def size_bytes(value: Any) -> Optional[float]:
     match = _SIZE_RE.match(str(value))
     if not match:
         return None
-    number, unit = float(match.group(1)), (match.group(2) or "B").upper().replace("I", "")
-    return number * (1000 ** _UNITS.index(unit))
+    raw_unit = (match.group(2) or "B").upper()
+    base = 1024 if "I" in raw_unit else 1000      # KiB, MiB, ... are binary
+    number, unit = float(match.group(1)), raw_unit.replace("I", "")
+    return number * (base ** _UNITS.index(unit))
 
 
 def human_size(value: Any) -> str:
@@ -159,10 +161,18 @@ def human_size(value: Any) -> str:
 # -- links -------------------------------------------------------------------
 
 def http_url(value: Any) -> str:
-    """The first http(s) URL in a field, or ''."""
-    for item in as_list(value):
-        if item.startswith(("http://", "https://")):
-            return item
+    """The first http(s) URL in a field, or ''.
+
+    An object is read for its `@id` / `url` before its display text, so
+    `{"@id": "https://spdx.org/licenses/MIT", "name": "MIT"}` still links.
+    """
+    items = value if isinstance(value, list) else [value]
+    for item in items:
+        candidates = ([item.get("@id"), item.get("url"), text(item)]
+                      if isinstance(item, dict) else [text(item)])
+        for candidate in candidates:
+            if isinstance(candidate, str) and candidate.startswith(("http://", "https://")):
+                return candidate.strip()
     return ""
 
 
@@ -190,9 +200,50 @@ def link_href(value: Any) -> str:
     return doi_href(raw)
 
 
+def resolved(value: Any, index: Dict[str, Dict[str, Any]]) -> Any:
+    """A bare `{"@id": ...}` reference swapped for the node it names, so a
+    field written as a reference displays like one written inline."""
+    if isinstance(value, list):
+        return [resolved(v, index) for v in value]
+    if isinstance(value, dict) and set(value) <= {"@id", "@type"} and value.get("@id") in index:
+        return index[value["@id"]]
+    return value
+
+
+def identifier(value: Any, link_base: str = "") -> Tuple[str, str, str]:
+    """`(label, text, href)` for an `identifier`, labelled by what it is.
+
+    A DOI links to doi.org and an ARK through `link_base`; a PropertyValue
+    is labelled by its `propertyID`; anything else is just "Identifier".
+    """
+    if isinstance(value, list):
+        value = next((v for v in value if text(v)), None)
+    label = ""
+    if isinstance(value, dict) and value.get("propertyID"):
+        label = text(value.get("propertyID"))
+        raw = text(value.get("value") or value.get("@id") or value.get("name"))
+    else:
+        raw = text(value)
+    if not raw:
+        return "", "", ""
+    lowered = raw.lower()
+    if lowered.startswith("doi:") or re.match(r"^10\.\d{4,}/", raw) or "doi.org/" in lowered:
+        return label or "DOI", raw, doi_href(raw)
+    if raw.startswith("ark:"):
+        return label or "ARK", raw, ark_href(raw, link_base)
+    href = raw if raw.startswith(("http://", "https://")) else ""
+    return label or "Identifier", raw, href
+
+
 def ark_href(ark: str, link_base: str) -> str:
-    """Where an ARK resolves, when a server base was given."""
-    if not ark or not link_base:
+    """Where an id resolves: an ARK under the server base, when one was
+    given; an http(s) id as itself; anything else (a local path, `./`, a
+    `#fragment`) has nowhere to go."""
+    if not ark:
+        return ""
+    if ark.startswith(("http://", "https://")):
+        return ark
+    if not link_base or not ark.startswith("ark:"):
         return ""
     return link_base.rstrip("/") + "/" + ark
 

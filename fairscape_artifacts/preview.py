@@ -12,7 +12,8 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
 from fairscape_artifacts import fields as f
-from fairscape_artifacts.composition import _entities, resolve_authors, summary_statistics
+from fairscape_artifacts.composition import (_entities, derived_generated, generated_ids,
+                                             resolve_authors, summary_statistics)
 from fairscape_artifacts.crate import Crate, ref_ids
 
 DESCRIPTION_LIMIT = 100
@@ -30,17 +31,22 @@ TABS = (
 )
 
 
-def _ref_row(ref_id: str, index, owner, here: str, *, with_format: bool = True):
+def _ref_row(ref_id: str, index, owner, here: str, *, with_format: bool = True,
+             names: Optional[Dict[str, str]] = None):
     node = index.get(ref_id)
     row = {"id": ref_id, "name": (f.first(node, "name") if node else "") or ref_id}
     if with_format:
         row["format"] = f.format_label(node) if node else ""
     source = owner.get(ref_id)
-    row["crate"] = source if source and source != here else ""
+    row["crate"] = (names or {}).get(source, source) if source and source != here else ""
     return row
 
 
-def computation_details(node, index, owner, here: str) -> Dict[str, Any]:
+def computation_details(node, index, owner, here: str,
+                        generated: Optional[Dict[str, List[str]]] = None,
+                        names: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
+    if generated is None:
+        generated = derived_generated(index)
     used = ref_ids(node, "usedDataset")
     software = ref_ids(node, "usedSoftware")
     models = ref_ids(node, "usedMLModel")
@@ -52,11 +58,12 @@ def computation_details(node, index, owner, here: str) -> Dict[str, Any]:
     if isinstance(command, list):
         command = " ".join(str(part) for part in command)
     return {
-        "inputs": [_ref_row(i, index, owner, here) for i in used],
-        "outputs": [_ref_row(o, index, owner, here)
-                    for o in ref_ids(node, "generated", "prov:generated")],
-        "software": [_ref_row(s, index, owner, here, with_format=False) for s in software],
-        "models": [_ref_row(m, index, owner, here) for m in models],
+        "inputs": [_ref_row(i, index, owner, here, names=names) for i in used],
+        "outputs": [_ref_row(o, index, owner, here, names=names)
+                    for o in generated_ids(node, generated)],
+        "software": [_ref_row(s, index, owner, here, with_format=False, names=names)
+                     for s in software],
+        "models": [_ref_row(m, index, owner, here, names=names) for m in models],
         "command": f.text(command),
         "parameters": f.as_list(node.get("parameter")),
     }
@@ -80,7 +87,8 @@ def schema_properties(node) -> List[Dict[str, Any]]:
     return rows
 
 
-def _item(node, kind: str, index, owner, here: str, link_base: str) -> Dict[str, Any]:
+def _item(node, kind: str, index, owner, here: str, link_base: str,
+          generated: Dict[str, List[str]], names: Dict[str, str]) -> Dict[str, Any]:
     description = f.first(node, "description")
     short, cut = f.truncate(description, DESCRIPTION_LIMIT)
     url = node.get("contentUrl")
@@ -107,7 +115,7 @@ def _item(node, kind: str, index, owner, here: str, link_base: str) -> Dict[str,
                                         else [node.get("@type")])) if t),
     }
     if kind == "computation":
-        item["computation"] = computation_details(node, index, owner, here)
+        item["computation"] = computation_details(node, index, owner, here, generated, names)
     if kind == "schema":
         item["properties"] = schema_properties(node)
     return item
@@ -115,23 +123,29 @@ def _item(node, kind: str, index, owner, here: str, link_base: str) -> Dict[str,
 
 def build_context(crate: Crate, index, owner, *, link_base: str = "",
                   datasheet_href: str = "", evidence_href: str = "",
-                  source: str = "", generated_at: str = "") -> Dict[str, Any]:
-    here = crate.name
+                  source: str = "", generated_at: str = "",
+                  names: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
+    """`owner` maps ids to crate root ids; `names` maps those to the names
+    shown (a crate missing from it is shown by its id)."""
+    here = crate.root_id
+    names = names or {}
     root = crate.root
     buckets: Dict[str, List[Dict[str, Any]]] = {key: [] for key, _, _ in TABS}
+    generated = derived_generated(index)
     for node in _entities(crate):
         kind = f.bucket(node)
         if kind == "rocrate":
             kind = "other"
-        buckets[kind].append(_item(node, kind, index, owner, here, link_base))
+        buckets[kind].append(_item(node, kind, index, owner, here, link_base, generated, names))
 
     tabs = [{"key": key, "label": label, "entries": buckets[kind], "n": len(buckets[kind])}
             for kind, key, label in TABS if buckets[kind]]
 
-    doi = f.first(root, "identifier")
+    id_label, id_text, id_href = f.identifier(root.get("identifier"), link_base)
+    publisher = f.resolved(root.get("publisher"), index)
     rows = [
         {"label": "RO-Crate ID", "value": crate.root_id, "href": f.ark_href(crate.root_id, link_base), "mono": True},
-        {"label": "DOI", "value": doi, "href": f.doi_href(doi), "mono": False},
+        {"label": id_label, "value": id_text, "href": id_href, "mono": id_label == "ARK"},
         {"label": "Version", "value": f.first(root, "version"), "href": "", "mono": True},
         {"label": "Release date", "value": f.first(root, "datePublished"), "href": "", "mono": False},
         {"label": "Date created", "value": f.first(root, "dateCreated"), "href": "", "mono": False},
@@ -139,7 +153,7 @@ def build_context(crate: Crate, index, owner, *, link_base: str = "",
         {"label": "Size", "value": f.human_size(root.get("contentSize")), "href": "", "mono": True},
         {"label": "Description", "value": f.first(root, "description"), "href": "", "mono": False},
         {"label": "Authors", "value": ", ".join(resolve_authors(root, index)), "href": "", "mono": False},
-        {"label": "Publisher", "value": f.first(root, "publisher"), "href": f.http_url(root.get("publisher")), "mono": False},
+        {"label": "Publisher", "value": f.text(publisher), "href": f.http_url(publisher), "mono": False},
         {"label": "Principal investigator", "value": f.first(root, "principalInvestigator"), "href": "", "mono": False},
         {"label": "Contact", "value": f.first(root, "contactEmail"), "href": f.link_href(root.get("contactEmail")), "mono": False},
         {"label": "License", "value": f.first(root, "license"), "href": f.http_url(root.get("license")), "mono": False},
