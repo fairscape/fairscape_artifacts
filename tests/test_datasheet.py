@@ -217,7 +217,7 @@ def test_summary_counts_the_graph_when_no_counters(tiny):
     assert not context["composition"]["show_index"]
 
 
-def test_review_panel_geometry_counts_criteria_not_points():
+def test_review_panel_geometry_draws_points():
     presentation = {"rubric": "r", "rubric_version": "1.5", "generated": "", "network_checks": False,
                     "sections": [{"number": 0, "title": "FAIRness", "gating": True, "criteria": [
                         {"id": "0.a", "name": "Findable", "estimate": {"score": "2"}, "evidence": []},
@@ -227,16 +227,18 @@ def test_review_panel_geometry_counts_criteria_not_points():
                     ]}]}
     panel = datasheet.review_panel(grading.summarize(presentation))
     assert panel["estimated"] == 3 and panel["criteria_total"] == 4
-    # Absent draws nothing: three slices, a quarter of the ring left empty.
+    # Two units per criterion: substantive 2, partial 1, hatched review 2, absent 0
+    # -> 5 of 8 units drawn, and the 3 filled units are points/possible of the 6 unhatched.
     assert [s["cls"] for s in panel["donut"]] == ["s2", "s1", "sna"]
-    assert sum(s["length"] for s in panel["donut"]) == pytest.approx(0.75 * panel["circumference"], abs=0.1)
+    assert [s["length"] for s in panel["donut"]] == pytest.approx(
+        [panel["circumference"] * u / 8 for u in (2, 1, 2)], abs=0.02)
     assert panel["donut"][1]["offset"] == pytest.approx(-panel["donut"][0]["length"])
     # Points follow the rubric's 2/1/0 over estimated criteria only.
     assert (panel["points"], panel["possible"]) == (3, 6)
     section = panel["sections"][0]
     assert section["estimated"] == 3 and section["total"] == 4
     assert (section["points"], section["possible"]) == (3, 6)
-    assert [s["pct"] for s in section["segments"]] == [25.0, 25.0, 25.0]
+    assert [s["pct"] for s in section["segments"]] == [25.0, 12.5, 25.0]
     assert panel["legend"][-1]["label"] == "No points"
 
 

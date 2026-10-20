@@ -106,13 +106,13 @@
       </div>
       <div class="review-flex">
         <div class="donut-wrap">
-          <svg class="donut" viewBox="0 0 120 120" role="img" aria-label="{{ review.estimated }} of {{ review.criteria_total }} criteria carry a mechanical estimate">
+          <svg class="donut" viewBox="0 0 120 120" role="img" aria-label="{{ review.points }} of {{ review.possible }} points over {{ review.estimated }} estimated criteria">
             <circle class="donut-track" cx="60" cy="60" r="54"></circle>
             {%- for seg in review.donut %}
             <circle class="seg {{ seg.cls }}" cx="60" cy="60" r="54" stroke-dasharray="{{ seg.length }} {{ review.circumference }}" stroke-dashoffset="{{ seg.offset }}"><title>{{ seg.label }}: {{ seg.n }}</title></circle>
             {%- endfor %}
-            <text class="donut-text" x="60" y="58">{{ review.estimated }}/{{ review.criteria_total }}</text>
-            <text class="donut-sub" x="60" y="74">estimated</text>
+            <text class="donut-text" x="60" y="58">{{ review.points }}/{{ review.possible }}</text>
+            <text class="donut-sub" x="60" y="74">points</text>
           </svg>
         </div>
         <div class="rbars">
@@ -190,9 +190,9 @@
 <section id="ai-ready-review">
   <h2>AI-Ready Review</h2>
   <div class="score-head">
-    <span class="score-total">{{ review.estimated }}/{{ review.criteria_total }}</span>
+    <span class="score-total">{{ review.points }}/{{ review.possible }}</span>
     <span class="score-sub">
-      criteria with a mechanical estimate &middot;
+      points over the {{ review.estimated }} of {{ review.criteria_total }} criteria with a mechanical estimate &middot;
       {{ review.tally['Substantive'] }} substantive,
       {{ review.tally['Partial'] }} partial,
       {{ review.tally['Absent'] }} absent,

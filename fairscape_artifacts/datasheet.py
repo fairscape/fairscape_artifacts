@@ -10,7 +10,8 @@ summarised by `fairscape_artifacts.composition`.
 The AI-Ready panel is a *review*, not a score: `fairscape_artifacts.grading`
 hands back the rubric's per-criterion estimates, with the criteria the
 rubric reserves for human judgment shown as awaiting review. No total is
-synthesized; the donut is a count of criteria by outcome.
+synthesized beyond the rubric's own 2/1/0 points; the donut and bars draw
+those points, with criteria awaiting human review hatched.
 
 Python computes plain data — rows, tallies, hrefs — and every angle bracket
 lives in a `.j2` file. Adding a row to the datasheet means adding a tuple to
@@ -75,6 +76,8 @@ USE_CASE_ROWS = (
 #: Donut / bar segments that are drawn: (tally label, css class). An absent
 #: criterion draws nothing — the empty track is the points not earned.
 SEGMENTS = (("Substantive", "s2"), ("Partial", "s1"), (grading.AWAITING, "sna"))
+#: Ring units each outcome fills, out of two per criterion (the rubric's 2/1/0).
+UNITS = {"Substantive": 2, "Partial": 1, grading.AWAITING: 2}
 CIRCUMFERENCE = round(2 * math.pi * 54, 2)
 
 #: The four headline statistics, always shown so the panel stays a 2x2 grid.
@@ -227,27 +230,30 @@ def _points(tally: Dict[str, int]) -> Dict[str, int]:
 def review_panel(review: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
     """The grader summary plus donut and bar geometry for the panel.
 
-    Every criterion is an equal slice. Substantive and partial slices are
-    drawn; a slice awaiting human review is drawn hatched so it is not read
-    as a miss; an absent criterion draws nothing, so the empty track is
-    simply the points the crate does not have.
+    The geometry draws points, so it agrees with the points/possible label:
+    every criterion is worth two units of the ring, a substantive criterion
+    fills both, a partial one fills one, and an absent one fills none. A
+    criterion awaiting human review is drawn hatched over its two units so it
+    is not read as a miss; with those set aside, the filled share of the rest
+    is exactly points / possible.
     """
     if not review:
         return None
-    total = review["criteria_total"] or 1
+    units = 2 * (review["criteria_total"] or 1)
     donut = []
     cursor = 0.0
     for label, cls in SEGMENTS:
         n = review["tally"][label]
-        length = round(CIRCUMFERENCE * n / total, 2)
+        length = round(CIRCUMFERENCE * UNITS[label] * n / units, 2)
         if n:
             donut.append({"label": label, "cls": cls, "n": n,
                           "length": length, "offset": round(-cursor, 2)})
         cursor += length
     for section in review["sections"]:
+        section_units = 2 * (section["total"] or 1)
         section["segments"] = [
             {"label": label, "cls": cls, "n": section["tally"][label],
-             "pct": round(100 * section["tally"][label] / (section["total"] or 1), 1)}
+             "pct": round(100 * UNITS[label] * section["tally"][label] / section_units, 1)}
             for label, cls in SEGMENTS if section["tally"][label]
         ]
         section.update(_points(section["tally"]))
