@@ -356,6 +356,29 @@
           <div class="srow"><b>Other</b> {{ d.other }}</div>
         </div>
       </div>
+      {%- if item.contents %}
+      <h4>Contents <span class="muted">({{ item.contents|length }})</span></h4>
+      <div class="toolbar">
+        <input type="search" id="contents-filter-{{ item.position }}" class="filter contents-filter" data-table="contents-{{ item.position }}" placeholder="Filter by name, type or format&hellip;" aria-label="Filter crate contents" autocomplete="off">
+        <span class="filter-count" id="contents-filter-{{ item.position }}-count"></span>
+      </div>
+      <div class="table-scroll">
+        <table class="index contents" id="contents-{{ item.position }}">
+          <thead><tr><th>Name</th><th class="nowrap">Type</th><th class="nowrap">Format</th><th class="nowrap">Size</th><th class="nowrap">Access</th></tr></thead>
+          <tbody>
+            {%- for row in item.contents %}
+            <tr data-search="{{ row.search }}">
+              <td>{{ row.name }}{% if row.description %}<div class="muted small">{{ row.description }}</div>{% endif %}<div class="mono small muted">{% if row.id_href %}<a href="{{ row.id_href }}">{{ row.id }}</a>{% else %}{{ row.id }}{% endif %}</div></td>
+              <td class="nowrap">{{ row.kind }}</td>
+              <td class="mono small">{{ row.format or '—' }}</td>
+              <td class="mono nowrap">{{ row.size or '—' }}</td>
+              <td class="nowrap">{% if row.access_href %}<a href="{{ row.access_href }}">{{ row.access }}</a>{% else %}{{ row.access or '—' }}{% endif %}</td>
+            </tr>
+            {%- endfor %}
+          </tbody>
+        </table>
+      </div>
+      {%- endif %}
       {%- for note in item.notes %}
       <p class="muted">{{ note }}</p>
       {%- endfor %}
@@ -465,6 +488,24 @@ document.addEventListener("DOMContentLoaded", function () {
     }
     filter.addEventListener("input", apply);
   }
+
+  /* Contents filter: one per single-crate card. */
+  Array.prototype.forEach.call(document.querySelectorAll(".contents-filter"), function (input) {
+    var table = document.getElementById(input.getAttribute("data-table"));
+    if (!table) return;
+    var trs = Array.prototype.slice.call(table.querySelectorAll("tbody tr"));
+    var count = document.getElementById(input.id + "-count");
+    input.addEventListener("input", function () {
+      var q = input.value.trim().toLowerCase();
+      var shown = 0;
+      trs.forEach(function (r) {
+        var ok = !q || (r.getAttribute("data-search") || "").indexOf(q) !== -1;
+        r.hidden = !ok;
+        if (ok) shown++;
+      });
+      if (count) count.textContent = q ? shown + " of " + trs.length + " entities" : "";
+    });
+  });
 
   /* Back to top. */
   var toTop = document.getElementById("back-to-top");

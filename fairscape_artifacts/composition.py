@@ -101,6 +101,59 @@ def _entities(crate: Crate):
         yield node
 
 
+#: Display order and label for each kind in a single crate's contents table.
+KIND_LABELS = (
+    ("dataset", "Dataset"),
+    ("mlmodel", "ML model"),
+    ("software", "Software"),
+    ("computation", "Computation"),
+    ("experiment", "Experiment"),
+    ("sample", "Sample"),
+    ("instrument", "Instrument"),
+    ("schema", "Schema"),
+    ("rocrate", "RO-Crate"),
+    ("other", "Other"),
+)
+
+
+def contents(crate: Crate, link_base: str = "") -> List[Dict[str, Any]]:
+    """One row per entity in the crate, grouped by kind then by name: what a
+    single crate's card lists so its datasheet shows everything it holds,
+    not just the counts."""
+    order = {kind: i for i, (kind, _) in enumerate(KIND_LABELS)}
+    labels = dict(KIND_LABELS)
+    rows = []
+    for node in _entities(crate):
+        kind = f.bucket(node)
+        if kind not in labels:
+            kind = "other"
+        nid = node.get("@id", "")
+        name = f.first(node, "name") or nid
+        fmt = f.format_label(node)
+        status = f.access(node) if kind in ("dataset", "software", "mlmodel") else ""
+        url = node.get("contentUrl")
+        if isinstance(url, list):
+            url = url[0] if url else None
+        description, cut = f.truncate(f.first(node, "description"), 160)
+        rows.append({
+            "kind": labels[kind],
+            "name": name,
+            "id": nid,
+            "id_href": f.ark_href(nid, link_base),
+            "description": description + ("…" if cut else ""),
+            "format": fmt,
+            "size": f.human_size(node.get("contentSize")),
+            "access": status,
+            "access_href": f.http_url(url) if status == "Available" else "",
+            "search": " ".join([name, labels[kind], fmt, nid]).lower(),
+            "_order": (order[kind], name.lower()),
+        })
+    rows.sort(key=lambda r: r["_order"])
+    for row in rows:
+        del row["_order"]
+    return rows
+
+
 def _pattern_key(pattern: Dict[str, Any]) -> str:
     ins = ";".join(f"{i['crate'] or ''}:{'+'.join(i['formats'])}" for i in pattern["inputs"])
     return ins + "->" + "+".join(pattern["outputs"])
@@ -432,8 +485,12 @@ def card(crate: Crate, *, stub: Optional[Dict[str, Any]], main_root: Dict[str, A
          link_base: str, preview: bool, position: int,
          generated: Optional[Dict[str, List[str]]] = None,
          names: Optional[Dict[str, str]] = None,
-         page_dir: Optional[str] = None) -> Dict[str, Any]:
+         page_dir: Optional[str] = None,
+         list_contents: bool = False) -> Dict[str, Any]:
     """Template context for one composition card.
+
+    `list_contents` adds a row per entity (`contents`); `build` sets it for
+    a crate with no constituents, whose one card is the whole composition.
 
     The sub-crate's own root wins; the release root's stub fills gaps; the
     release root itself supplies a DOI and publications when neither has
@@ -529,6 +586,7 @@ def card(crate: Crate, *, stub: Optional[Dict[str, Any]], main_root: Dict[str, A
         "statistics": summary_statistics(crate, rel_dir, crate_dir, out_dir, page_dir),
         "metadata_path": "/".join(p for p in (rel_dir, METADATA_FILENAME) if p),
         "details": det,
+        "contents": contents(crate, link_base) if list_contents else [],
         "notes": notes(crate, generated),
         "search": search,
     }
@@ -563,7 +621,8 @@ def build(crate: Crate, *, out_dir: str, link_base: str = "",
         context = card(crate, stub=None, main_root=crate.root, rel_dir="",
                        index=index, owner=owner, crate_dir=crate_dir, out_dir=out_dir,
                        link_base=link_base, preview=previews, position=1,
-                       generated=generated, names=names, page_dir=page_dir)
+                       generated=generated, names=names, page_dir=page_dir,
+                       list_contents=True)
         preview_path = os.path.join(out_dir, PREVIEW_HTML) if previews else ""
         comp.items.append(Item(context=context, crate=crate, rel_dir="",
                                preview_path=preview_path))
