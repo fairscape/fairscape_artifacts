@@ -29,7 +29,7 @@ from __future__ import annotations
 
 import json
 import os
-from typing import Any, Dict, Iterable, List, Sequence, Tuple
+from typing import Any, Dict, List, Sequence, Tuple
 
 EVI_NAMESPACE = "https://w3id.org/EVI#"
 
@@ -142,11 +142,6 @@ def apply(graph: Sequence[Dict[str, Any]]) -> List[Addition]:
     return additions
 
 
-def ensure(crate) -> List[Addition]:
-    """`apply` over a loaded `Crate`, in memory."""
-    return apply(crate.graph)
-
-
 def write(path: str) -> Tuple[bool, str]:
     """Persist the missing inverse links into the crate's metadata file.
 
@@ -175,11 +170,3 @@ def write(path: str) -> Tuple[bool, str]:
     touched = len({(e, k) for e, k, _ in additions})
     return True, (f"Added {len(additions)} inverse link(s) on {touched} "
                   f"propert{'y' if touched == 1 else 'ies'} in {path}")
-
-
-def summary(additions: Iterable[Addition]) -> Dict[str, int]:
-    """`{property key: links added}` for a report line."""
-    out: Dict[str, int] = {}
-    for _, key, _ in additions:
-        out[key] = out.get(key, 0) + 1
-    return dict(sorted(out.items()))

@@ -1,4 +1,5 @@
 {% extends "base.html.j2" %}
+{% from "macros.html.j2" import kv %}
 
 {% macro desc(item) -%}
 <td{% if item.description != item.description_short %} title="{{ item.description }}"{% endif %}>{{ item.description_short }}</td>
@@ -26,17 +27,8 @@
   <h2>RO-Crate Summary</h2>
   <div class="kv">
     {%- for row in rows %}
-    <div>
-      <div class="label">{{ row.label }}</div>
-      <div class="value{% if row.mono %} mono{% endif %}">{% if row.href %}<a href="{{ row.href }}"{% if row.href.startswith('http') %} target="_blank" rel="noopener"{% endif %}>{{ row.value }}</a>{% else %}{{ row.value }}{% endif %}</div>
-    </div>
+    {{ kv(row) }}
     {%- endfor %}
-    {%- if citation %}
-    <div><div class="label">Cite as</div><div class="value"><ul class="plain">{% for c in citation %}<li>{{ c }}</li>{% endfor %}</ul></div></div>
-    {%- endif %}
-    {%- if publications %}
-    <div><div class="label">Related publications</div><div class="value"><ul class="plain">{% for p in publications %}<li>{{ p }}</li>{% endfor %}</ul></div></div>
-    {%- endif %}
   </div>
 </section>
 
@@ -65,7 +57,7 @@
           {{ desc(item) }}
           <td class="mono nowrap">{{ item.date }}</td>
           {{ ident(item) }}
-          <td>{% if item.computation.inputs or item.computation.outputs or item.computation.software or item.computation.models or item.computation.command %}<button class="toggle" data-toggle="c-{{ loop.index }}">Show details</button>{% else %}<span class="muted">None recorded</span>{% endif %}</td>
+          <td>{% if item.computation.any %}<button class="toggle" data-toggle="c-{{ loop.index }}">Show details</button>{% else %}<span class="muted">None recorded</span>{% endif %}</td>
         </tr>
         <tr class="details-row" id="c-{{ loop.index }}" hidden>
           <td colspan="5">

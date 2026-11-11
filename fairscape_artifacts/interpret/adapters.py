@@ -24,7 +24,7 @@ from fairscape_graph_tools.pipeline.graph_utils import (
     is_rocrate_root,
 )
 
-from fairscape_artifacts.crate import METADATA_FILENAME, Crate
+from fairscape_artifacts.crate import METADATA_FILENAME, Crate, ids_of
 
 logger = logging.getLogger(__name__)
 
@@ -129,7 +129,7 @@ class CrateGraphSource:
                 continue
             collected[node_id] = node
             for field in ARK_REF_FIELDS:
-                for ref in _refs(node.get(field)):
+                for ref in ids_of(node.get(field)):
                     if ref not in collected:
                         queue.append(ref)
         return list(collected.values())
@@ -139,21 +139,6 @@ class CrateGraphSource:
     def owner_of(self, node_id: str) -> Optional[Crate]:
         """The crate a node was read from, for resolving its `contentUrl`."""
         return self._owner.get(node_id)
-
-
-def _refs(value: Any) -> List[str]:
-    if isinstance(value, dict):
-        value = [value]
-    elif isinstance(value, str):
-        value = [value]
-    elif not isinstance(value, list):
-        return []
-    out = []
-    for item in value:
-        ref = item.get("@id") if isinstance(item, dict) else item
-        if isinstance(ref, str) and ref:
-            out.append(ref)
-    return out
 
 
 # -- ResultSink -------------------------------------------------------------

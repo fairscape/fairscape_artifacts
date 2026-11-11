@@ -4,16 +4,18 @@ build-backend = "hatchling.build"
 
 [project]
 name = "fairscape-artifacts"
-version = "0.2.0"
+version = "0.3.0"
 description = "Generate datasheets, evidence graphs and AI-Ready reviews from a local RO-Crate"
 requires-python = ">=3.9"
 license = { text = "Apache-2.0" }
 dependencies = [
-    # The only hard dependency. The evidence graph engine, the crate reader
-    # and the input/output derivation are standard library only, and the
-    # React Flow viewer is a checked-in build (see static/PROVENANCE.md), so
-    # installing this does not need a node toolchain.
+    # The pages are Jinja templates over pydantic page models (`models.py`).
+    # The evidence graph engine, the crate reader and the input/output
+    # derivation are standard library only, and the React Flow viewer is a
+    # checked-in build (see static/PROVENANCE.md), so installing this does
+    # not need a node toolchain.
     "jinja2>=3.0",
+    "pydantic>=2.0",
 ]
 
 [project.optional-dependencies]

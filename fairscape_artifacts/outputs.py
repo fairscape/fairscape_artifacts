@@ -55,6 +55,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from fairscape_artifacts.crate import (
     METADATA_FILENAME,
+    OUTPUT_FIELDS,
     derived_from_ids,
     evi_type,
     generated_by_ids,
@@ -64,8 +65,8 @@ from fairscape_artifacts.crate import (
 
 Ref = Dict[str, str]
 
-EVI_INPUTS = "https://w3id.org/EVI#inputs"
-EVI_OUTPUTS = "https://w3id.org/EVI#outputs"
+#: Where a crate root records what it consumed, in precedence order.
+INPUT_FIELDS = ("https://w3id.org/EVI#inputs", "EVI:inputs", "inputs")
 
 _SAMPLE_TYPES = ("https://w3id.org/EVI#Sample", "EVI:Sample")
 _COMPUTATION_TYPES = ("https://w3id.org/EVI#Computation", "EVI:Computation")
@@ -168,10 +169,7 @@ def stored(root: Dict[str, Any]) -> Tuple[List[Ref], List[Ref]]:
                 return [i for i in items if isinstance(i, dict) and i.get("@id")]
         return []
 
-    return (
-        read(EVI_INPUTS, "EVI:inputs", "inputs"),
-        read(EVI_OUTPUTS, "EVI:outputs", "outputs"),
-    )
+    return read(*INPUT_FIELDS), read(*OUTPUT_FIELDS)
 
 
 def ensure(crate) -> Tuple[List[Ref], List[Ref]]:
@@ -224,8 +222,8 @@ def write(path: str) -> Tuple[bool, str]:
         return False, "Could not find root entity in RO-Crate"
 
     inputs, outputs = calculate(crate.graph)
-    _replace(crate.root, (EVI_INPUTS, "EVI:inputs", "inputs"), inputs)
-    _replace(crate.root, (EVI_OUTPUTS, "EVI:outputs", "outputs"), outputs)
+    _replace(crate.root, INPUT_FIELDS, inputs)
+    _replace(crate.root, OUTPUT_FIELDS, outputs)
 
     with open(path, "w", encoding="utf-8") as handle:
         json.dump(crate.data, handle, indent=2, ensure_ascii=False)

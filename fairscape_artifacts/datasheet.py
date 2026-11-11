@@ -1,4 +1,4 @@
-"""Turn a crate into the context the datasheet template renders.
+"""Build the `DatasheetPage` for a crate.
 
 The page follows the FAIRSCAPE datasheet layout: an executive summary
 (statistics and the AI-Ready review at a glance), the release overview with
@@ -13,9 +13,8 @@ rubric reserves for human judgment shown as awaiting review. No total is
 synthesized beyond the rubric's own 2/1/0 points; the donut and bars draw
 those points, with criteria awaiting human review hatched.
 
-Python computes plain data — rows, tallies, hrefs — and every angle bracket
-lives in a `.j2` file. Adding a row to the datasheet means adding a tuple to
-one of the tables below, not writing HTML in Python.
+Adding a row to the datasheet means adding a `Row.of(...)` to one of the
+tables below, not writing HTML in Python.
 """
 
 from __future__ import annotations
@@ -24,13 +23,17 @@ import datetime as _dt
 import math
 import os
 from collections import Counter
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from fairscape_artifacts import composition as composition_mod
 from fairscape_artifacts import fields as f
 from fairscape_artifacts import grading
-from fairscape_artifacts.composition import Composition, resolve_authors
-from fairscape_artifacts.crate import Crate, METADATA_FILENAME, ref_ids
+from fairscape_artifacts.composition import Composition
+from fairscape_artifacts.crate import Crate, ref_ids
+from fairscape_artifacts.models import (NOT_SPECIFIED, Badge, CompositionSection,
+                                        CrateMetadata, DatasheetPage, Link, Links, NavEntry,
+                                        Regulatory, ReviewPanel, ReviewSection, Row, Segment,
+                                        Stat, Summary, Swatch, links)
 
 #: Summary tiles, in display order: (label, bucket, evi counter on the root).
 TILES = (
@@ -84,71 +87,26 @@ CIRCUMFERENCE = round(2 * math.pi * 54, 2)
 HEADLINE = (("Total size", None), ("Datasets", "dataset"),
             ("Computations", "computation"), ("Software", "software"))
 
-NOT_SPECIFIED = "Not specified"
-
-
-# -- rows ----------------------------------------------------------------------
-
-def row(label: str, value: Any = "", *, id: str = "", href: str = "", kind: str = "text",
-        items: Optional[List[Dict[str, str]]] = None,
-        missing: str = "") -> Optional[Dict[str, Any]]:
-    """One label/value row, or None when there is nothing to show.
-
-    `kind` is text, mono, link (uses `href`) or list (uses `items`); a row
-    with `missing` set renders that placeholder instead of disappearing,
-    for fields a reader should notice are absent.
-    """
-    value = f.text(value) if not isinstance(value, str) else value.strip()
-    if kind == "list":
-        items = [i for i in (items or []) if i.get("text")]
-        if not items:
-            return {"id": id, "label": label, "kind": "missing", "value": missing,
-                    "href": "", "entries": []} if missing else None
-        return {"id": id, "label": label, "kind": "list", "value": "", "href": "",
-                "entries": items}
-    if not value:
-        if missing:
-            return {"id": id, "label": label, "kind": "missing", "value": missing,
-                    "href": "", "entries": []}
-        return None
-    return {"id": id, "label": label, "kind": kind, "value": value, "href": href,
-            "entries": []}
-
-
-def _list_items(values: List[str]) -> List[Dict[str, str]]:
-    return [{"text": v, "href": f.link_href(v) if v.startswith(("http", "doi:", "10.")) else ""}
-            for v in values]
-
-
-def _prop(root: Dict[str, Any], field: str, *ap_names: str) -> str:
-    """A top-level field, falling back to an `additionalProperty` entry."""
-    return f.first(root, field) or (f.additional_property(root, *ap_names) if ap_names else "")
-
 
 # -- sections ----------------------------------------------------------------
 
-def badges(crate: Crate, link_base: str) -> List[Dict[str, str]]:
-    root = crate.root
-    id_label, id_text, id_href = f.identifier(root.get("identifier"), link_base)
+def badges(meta: CrateMetadata) -> List[Badge]:
     out = []
-    version = f.first(root, "version")
-    if version:
-        out.append({"label": f"Version {version}", "href": "", "title": ""})
-    if id_text:
-        out.append({"label": id_label, "href": id_href, "title": id_text})
-    license_ = f.first(root, "license")
-    if license_:
-        out.append({"label": "License", "href": f.http_url(root.get("license")), "title": license_})
-    size = f.human_size(root.get("contentSize")) or f.human_size(root.get("evi:totalContentSizeBytes"))
-    if size:
-        out.append({"label": size, "href": "", "title": ""})
-    released = f.first(root, "datePublished")
-    if released:
-        out.append({"label": f"Released {released}", "href": "", "title": ""})
+    if meta.version:
+        out.append(Badge(label=f"Version {meta.version}"))
+    if meta.identifier:
+        out.append(Badge(label=meta.identifier_label, href=meta.identifier_href,
+                         title=meta.identifier))
+    if meta.license:
+        out.append(Badge(label="License", href=meta.license_href, title=meta.license))
+    if meta.size:
+        out.append(Badge(label=meta.size))
+    if meta.date_published:
+        out.append(Badge(label=f"Released {meta.date_published}"))
     return out
 
 
-def summary(crate: Crate, comp: Composition) -> Dict[str, Any]:
+def summary(crate: Crate, comp: Composition) -> Summary:
     """The executive summary's statistics.
 
     A release crate that carries `evi:*` counters on its root is trusted;
@@ -168,13 +126,12 @@ def summary(crate: Crate, comp: Composition) -> Dict[str, Any]:
     else:
         format_counter: Counter = Counter()
         entities = 0
-        nodes = [n for member in comp.crates for n in composition_mod._entities(member)]
+        nodes = [n for member in comp.crates for n in member.entities()]
         if comp.is_release:
             # Entities described on the release root itself, not in any
             # constituent (a top-level README, say), count too.
             described = {n.get("@id") for n in nodes}
-            nodes += [n for n in composition_mod._entities(crate)
-                      if n.get("@id") not in described]
+            nodes += [n for n in crate.entities() if n.get("@id") not in described]
         for node in nodes:
             kind = f.bucket(node)
             if kind == "rocrate":
@@ -191,29 +148,29 @@ def summary(crate: Crate, comp: Composition) -> Dict[str, Any]:
             or f.human_size(root.get("evi:totalContentSizeBytes"))
             or (f.human_size(size_total) if size_total else ""))
 
-    stats = [{"label": label, "n": (size or "—") if bucket is None else f"{counts[bucket]:,}"}
+    stats = [Stat(label=label, n=(size or "—") if bucket is None else f"{counts[bucket]:,}")
              for label, bucket in HEADLINE]
     headline_buckets = {bucket for _, bucket in HEADLINE}
     extra = []
     if comp.is_release:
-        extra.append({"label": "sub-crates", "n": f"{len(comp.items):,}"})
+        extra.append(Stat(label="sub-crates", n=f"{len(comp.items):,}"))
     linked = crate.linked_crates()
     if linked:
-        extra.append({"label": "linked crates", "n": f"{len(linked):,}"})
+        extra.append(Stat(label="linked crates", n=f"{len(linked):,}"))
     for label, bucket, _ in TILES:
         if bucket not in headline_buckets and counts[bucket]:
-            extra.append({"label": label.lower(), "n": f"{counts[bucket]:,}"})
+            extra.append(Stat(label=label.lower(), n=f"{counts[bucket]:,}"))
 
-    return {
-        "description": description,
-        "truncated": truncated,
-        "stats": stats,
-        "extra": extra,
-        "entities": entities,
-        "formats": formats[:FORMATS_SHOWN],
-        "formats_more": max(0, len(formats) - FORMATS_SHOWN),
-        "access_href": f.http_url(root.get("contentUrl")) or f.http_url(root.get("url")),
-    }
+    return Summary(
+        description=description,
+        truncated=truncated,
+        stats=stats,
+        extra=extra,
+        entities=entities,
+        formats=formats[:FORMATS_SHOWN],
+        formats_more=max(0, len(formats) - FORMATS_SHOWN),
+        access_href=f.http_url(root.get("contentUrl")) or f.http_url(root.get("url")),
+    )
 
 
 def _points(tally: Dict[str, int]) -> Dict[str, int]:
@@ -227,7 +184,7 @@ def _points(tally: Dict[str, int]) -> Dict[str, int]:
             "possible": 2 * estimated}
 
 
-def review_panel(review: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+def review_panel(review: Optional[Dict[str, Any]]) -> Optional[ReviewPanel]:
     """The grader summary plus donut and bar geometry for the panel.
 
     The geometry draws points, so it agrees with the points/possible label:
@@ -246,24 +203,26 @@ def review_panel(review: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
         n = review["tally"][label]
         length = round(CIRCUMFERENCE * UNITS[label] * n / units, 2)
         if n:
-            donut.append({"label": label, "cls": cls, "n": n,
-                          "length": length, "offset": round(-cursor, 2)})
+            donut.append(Segment(label=label, cls=cls, n=n, length=length,
+                                 offset=round(-cursor, 2)))
         cursor += length
+    sections = []
     for section in review["sections"]:
         section_units = 2 * (section["total"] or 1)
-        section["segments"] = [
-            {"label": label, "cls": cls, "n": section["tally"][label],
-             "pct": round(100 * UNITS[label] * section["tally"][label] / section_units, 1)}
+        segments = [
+            Segment(label=label, cls=cls, n=section["tally"][label],
+                    pct=round(100 * UNITS[label] * section["tally"][label] / section_units, 1))
             for label, cls in SEGMENTS if section["tally"][label]
         ]
-        section.update(_points(section["tally"]))
-    legend = [{"label": label, "cls": cls} for label, cls in SEGMENTS]
-    legend.append({"label": "No points", "cls": "none"})
-    return {**review, "donut": donut, "circumference": CIRCUMFERENCE,
-            "legend": legend, **_points(review["tally"])}
+        sections.append(ReviewSection(**section, segments=segments, **_points(section["tally"])))
+    legend = [Swatch(label=label, cls=cls) for label, cls in SEGMENTS]
+    legend.append(Swatch(label="No points", cls="none"))
+    return ReviewPanel(**{k: v for k, v in review.items() if k != "sections"},
+                       sections=sections, donut=donut, circumference=CIRCUMFERENCE,
+                       legend=legend, **_points(review["tally"]))
 
 
-def linked_crate_items(crate: Crate) -> List[Dict[str, str]]:
+def linked_crate_items(crate: Crate) -> List[Link]:
     """One entry per upstream crate this crate points at: its name, how many
     of this crate's entities it owns, and a link to its datasheet when one
     sits beside its metadata file."""
@@ -282,89 +241,80 @@ def linked_crate_items(crate: Crate) -> List[Dict[str, str]]:
             href = os.path.join(sub.rel_dir, "ro-crate-datasheet.html").replace(os.sep, "/") \
                 if not os.path.isabs(sub.rel_dir) else \
                 os.path.join(sub.crate.dir, "ro-crate-datasheet.html")
-        items.append({"text": text, "href": href})
+        items.append(Link(text=text, href=href))
     return items
 
 
-def overview(crate: Crate, index, link_base: str) -> List[Dict[str, Any]]:
-    root = crate.root
-    id_label, id_text, id_href = f.identifier(root.get("identifier"), link_base)
-    publisher = f.resolved(root.get("publisher"), index)
-    citation = f.publications(root.get("citation"))
-    publications = f.publications(root.get("associatedPublication"))
+def overview(crate: Crate, meta: CrateMetadata) -> List[Row]:
+    citation = meta.citation
     rows = [
-        row("RO-Crate ID", crate.root_id, id="accession", kind="mono",
-            href=f.ark_href(crate.root_id, link_base)),
-        row(id_label or "DOI", id_text, id="doi", kind="link", href=id_href, missing=NOT_SPECIFIED),
-        row("Release Date", f.first(root, "datePublished"), id="release-date"),
-        row("Date Created", f.first(root, "dateCreated"), id="date-created"),
-        row("Date Modified", f.first(root, "dateModified"), id="date-modified"),
-        row("Version", f.first(root, "version"), id="version", kind="mono"),
-        row("Size", f.human_size(root.get("contentSize"))
-            or f.human_size(root.get("evi:totalContentSizeBytes")), id="content-size", kind="mono"),
-        row("Description", f.first(root, "description"), id="description"),
-        row("Authors", ", ".join(resolve_authors(root, index)), id="authors"),
-        row("Publisher", f.text(publisher), id="publisher",
-            kind="link", href=f.http_url(publisher)),
-        row("Principal Investigator", f.first(root, "principalInvestigator"),
-            id="principal-investigator"),
-        row("Contact Email", f.first(root, "contactEmail"), id="contact-email",
-            kind="link", href=f.link_href(root.get("contactEmail"))),
-        row("Data Governance Committee",
-            _prop(root, "dataGovernanceCommittee", "Data Governance Committee"),
-            id="data-governance"),
-        row("Ethical Review", f.first(root, "ethicalReview"), id="ethical-review"),
-        row("Copyright", f.first(root, "copyrightNotice"), id="copyright"),
-        row("License", f.first(root, "license"), id="license", kind="link",
-            href=f.http_url(root.get("license")), missing=NOT_SPECIFIED),
-        row("Terms of Use", f.first(root, "conditionsOfAccess"), id="terms-of-use",
-            kind="link", href=f.http_url(root.get("conditionsOfAccess"))),
-        row("HL7 Confidentiality Level", f.first(root, "confidentialityLevel"),
-            id="confidentiality-level"),
-        row("Keywords", ", ".join(f.keywords(root)), id="keywords"),
-        row("Cite As", citation[0] if len(citation) == 1 else "", id="citation",
-            kind="text") if len(citation) <= 1 else
-        row("Cite As", id="citation", kind="list", items=_list_items(citation)),
-        row("Funding", f.joined(root.get("funder")), id="funding"),
-        row("Completeness", _prop(root, "completeness", "Completeness"), id="completeness"),
-        row("Related Publications", id="related-publications", kind="list",
-            items=_list_items(publications)),
-        row("Based On", id="based-on", kind="list",
-            items=_list_items(f.as_list(root.get("isBasedOn")))),
-        row("Linked Crates", id="linked-crates", kind="list",
-            items=linked_crate_items(crate)),
-        row("Conforms To", id="conforms-to", kind="list",
-            items=_list_items(f.as_list(root.get("conformsTo")))),
+        Row.of("RO-Crate ID", meta.id, id="accession", kind="mono", href=meta.id_href),
+        Row.of(meta.identifier_label or "DOI", meta.identifier, id="doi", kind="link",
+               href=meta.identifier_href, missing=NOT_SPECIFIED),
+        Row.of("Release Date", meta.date_published, id="release-date"),
+        Row.of("Date Created", meta.date_created, id="date-created"),
+        Row.of("Date Modified", meta.date_modified, id="date-modified"),
+        Row.of("Version", meta.version, id="version", kind="mono"),
+        Row.of("Size", meta.size, id="content-size", kind="mono"),
+        Row.of("Description", meta.description, id="description"),
+        Row.of("Authors", ", ".join(meta.authors), id="authors"),
+        Row.of("Publisher", meta.publisher, id="publisher", kind="link", href=meta.publisher_href),
+        Row.of("Principal Investigator", meta.principal_investigator,
+               id="principal-investigator"),
+        Row.of("Contact Email", meta.contact, id="contact-email", kind="link",
+               href=meta.contact_href),
+        Row.of("Data Governance Committee", meta.data_governance, id="data-governance"),
+        Row.of("Ethical Review", meta.ethical_review, id="ethical-review"),
+        Row.of("Copyright", meta.copyright, id="copyright"),
+        Row.of("License", meta.license, id="license", kind="link", href=meta.license_href,
+               missing=NOT_SPECIFIED),
+        Row.of("Terms of Use", meta.terms_of_use, id="terms-of-use", kind="link",
+               href=meta.terms_href),
+        Row.of("HL7 Confidentiality Level", meta.confidentiality, id="confidentiality-level"),
+        Row.of("Keywords", ", ".join(meta.keywords), id="keywords"),
+        Row.of("Cite As", citation[0] if len(citation) == 1 else "", id="citation")
+        if len(citation) <= 1 else
+        Row.of("Cite As", id="citation", kind="list", items=links(citation)),
+        Row.of("Funding", meta.funder, id="funding"),
+        Row.of("Completeness", meta.completeness, id="completeness"),
+        Row.of("Related Publications", id="related-publications", kind="list",
+               items=links(meta.publications)),
+        Row.of("Based On", id="based-on", kind="list", items=links(meta.based_on)),
+        Row.of("Linked Crates", id="linked-crates", kind="list",
+               items=linked_crate_items(crate)),
+        Row.of("Conforms To", id="conforms-to", kind="list", items=links(meta.conforms_to)),
     ]
     return [r for r in rows if r]
 
 
-def regulatory(crate: Crate) -> Dict[str, Any]:
+def _prop(root: Dict[str, Any], field: str, *ap_names: str) -> str:
+    """A top-level field, falling back to an `additionalProperty` entry."""
+    return f.first(root, field) or f.additional_property(root, *ap_names)
+
+
+def regulatory(crate: Crate) -> Regulatory:
     """The human-subjects block. Absent fields say so rather than assuming a
     reassuring default."""
     root = crate.root
     irb = f.resolved(root.get("irb"), crate.index)
     if not isinstance(irb, dict):
         irb = f.first(root, "irb") or f.additional_property(root, "IRB")
-    fields = {
-        "human_subject_research": _prop(root, "humanSubjectResearch", "Human Subject Research")
-                                  or f.first(root, "humanSubjects"),
-        "deidentified": f.yes_no(root.get("deidentified"))
-                        or f.additional_property(root, "De-identified Samples"),
-        "fda_regulated": f.yes_no(root.get("fdaRegulated"))
-                         or f.additional_property(root, "FDA Regulated"),
-        "irb_protocol_id": _prop(root, "irbProtocolId", "IRB Protocol ID"),
-        "irb": irb,
-        "exemptions": _prop(root, "humanSubjectExemption", "Human Subjects Exemptions"),
-        "informed_consent": f.first(root, "d4d:informedConsent"),
-        "at_risk_populations": f.first(root, "d4d:atRiskPopulations"),
-    }
-    fields["any"] = any(bool(v) for v in fields.values())
-    fields["not_specified"] = NOT_SPECIFIED
-    return fields
+    return Regulatory(
+        human_subject_research=(_prop(root, "humanSubjectResearch", "Human Subject Research")
+                                or f.first(root, "humanSubjects")),
+        deidentified=(f.yes_no(root.get("deidentified"))
+                      or f.additional_property(root, "De-identified Samples")),
+        fda_regulated=(f.yes_no(root.get("fdaRegulated"))
+                       or f.additional_property(root, "FDA Regulated")),
+        irb_protocol_id=_prop(root, "irbProtocolId", "IRB Protocol ID"),
+        irb=irb,
+        exemptions=_prop(root, "humanSubjectExemption", "Human Subjects Exemptions"),
+        informed_consent=f.first(root, "d4d:informedConsent"),
+        at_risk_populations=f.first(root, "d4d:atRiskPopulations"),
+    )
 
 
-def use_cases(crate: Crate) -> List[Dict[str, Any]]:
+def use_cases(crate: Crate) -> List[Row]:
     root = crate.root
     rows = []
     for label, sources, ap_name, joiner in USE_CASE_ROWS:
@@ -375,87 +325,78 @@ def use_cases(crate: Crate) -> List[Dict[str, Any]]:
                 break
         if not value and ap_name:
             value = f.additional_property(root, ap_name)
-        item = row(label, value)
+        item = Row.of(label, value)
         if item:
             rows.append(item)
     return rows
 
 
-def distribution(crate: Crate, link_base: str = "") -> List[Dict[str, Any]]:
-    root = crate.root
-    id_label, id_text, id_href = f.identifier(root.get("identifier"), link_base)
-    publisher = f.resolved(root.get("publisher"), crate.index)
+def distribution(meta: CrateMetadata) -> List[Row]:
     rows = [
-        row("Publisher", f.text(publisher), kind="link", href=f.http_url(publisher)),
-        row("License", f.first(root, "license"), kind="link",
-            href=f.http_url(root.get("license")), missing=NOT_SPECIFIED),
-        row(id_label, id_text, kind="link", href=id_href),
-        row("Release Date", f.first(root, "datePublished")),
-        row("Version", f.first(root, "version"), kind="mono"),
-        row("Access", f.http_url(root.get("contentUrl")) or f.http_url(root.get("url")),
-            kind="link", href=f.http_url(root.get("contentUrl")) or f.http_url(root.get("url"))),
+        Row.of("Publisher", meta.publisher, kind="link", href=meta.publisher_href),
+        Row.of("License", meta.license, kind="link", href=meta.license_href,
+               missing=NOT_SPECIFIED),
+        Row.of(meta.identifier_label, meta.identifier, kind="link", href=meta.identifier_href),
+        Row.of("Release Date", meta.date_published),
+        Row.of("Version", meta.version, kind="mono"),
+        Row.of("Access", meta.access_href, kind="link", href=meta.access_href),
     ]
     return [r for r in rows if r]
 
 
-def navigation(comp: Composition, has_use_cases: bool, has_review: bool) -> List[Dict[str, Any]]:
+def navigation(comp: Composition, has_use_cases: bool, has_review: bool) -> List[NavEntry]:
     nav = [
-        {"href": "#datasheet-summary", "label": "Datasheet Summary", "children": []},
-        {"href": "#dataset-details", "label": "Release Overview", "children": []},
+        NavEntry(href="#datasheet-summary", label="Datasheet Summary"),
+        NavEntry(href="#dataset-details", label="Release Overview"),
     ]
     if has_use_cases:
-        nav.append({"href": "#ai-readiness", "label": "AI Ready Details", "children": []})
+        nav.append(NavEntry(href="#ai-readiness", label="AI Ready Details"))
     if has_review:
-        nav.append({"href": "#ai-ready-review", "label": "AI-Ready Review", "children": []})
-    children = [{"href": "#composition", "label": "All datasets"}] if comp.is_release else []
-    children += [{"href": "#" + item.context["anchor"], "label": item.context["name"]}
-                 for item in comp.items]
-    nav.append({"href": "#composition", "label": "Composition", "children": children})
-    nav.append({"href": "#distribution", "label": "Distribution", "children": []})
+        nav.append(NavEntry(href="#ai-ready-review", label="AI-Ready Review"))
+    children = [NavEntry(href="#composition", label="All datasets")] if comp.is_release else []
+    children += [NavEntry(href="#" + card.anchor, label=card.meta.name) for card in comp.cards]
+    nav.append(NavEntry(href="#composition", label="Composition", children=children))
+    nav.append(NavEntry(href="#distribution", label="Distribution"))
     return nav
 
 
 # -- entry point ---------------------------------------------------------------
 
-def build_context(crate: Crate, *, composition: Optional[Composition] = None,
-                  review: Optional[Dict[str, Any]] = None,
-                  generated_at: Optional[str] = None,
-                  links: Optional[Dict[str, str]] = None,
-                  link_base: str = "") -> Dict[str, Any]:
-    """Everything the datasheet template needs, and nothing else."""
+def build(crate: Crate, *, composition: Optional[Composition] = None,
+          review: Optional[Dict[str, Any]] = None,
+          generated_at: Optional[str] = None,
+          links: Union[Links, Dict[str, str], None] = None,
+          link_base: str = "") -> DatasheetPage:
+    """The datasheet page for `crate`.
+
+    `review` is the grader's presentation document, if one was produced;
+    `links` names the companion pages beside the datasheet.
+    """
     if composition is None:
         composition = composition_mod.build(
             crate, out_dir=crate.dir or os.getcwd(), link_base=link_base, previews=False)
-    root = crate.root
+    meta = CrateMetadata.read(crate.root, composition.index, link_base)
     review_summary = review_panel(grading.summarize(review))
     use_case_rows = use_cases(crate)
-    links = {"evidence_graph": "", "review_html": "", "review_json": "", "graph_json": "",
-             "interpretation_html": "", "interpretation_json": "", **(links or {})}
 
-    return {
-        "kicker": "Datasheet",
-        "title": crate.name or "RO-Crate",
-        "ark": crate.root_id,
-        "ark_href": f.ark_href(crate.root_id, link_base),
-        "description": "",
-        "chips": f.keywords(root)[:12],
-        "badges": badges(crate, link_base),
-        "body_class": "has-nav",
-        "nav": navigation(composition, bool(use_case_rows), bool(review_summary)),
-        "summary": summary(crate, composition),
-        "review": review_summary,
-        "overview": overview(crate, composition.index, link_base),
-        "regulatory": regulatory(crate),
-        "use_cases": use_case_rows,
-        "composition": {
-            "cards": [item.context for item in composition.items],
-            "count": len(composition.items),
-            "is_release": composition.is_release,
-            "show_index": len(composition.items) > 1,
-        },
-        "distribution": distribution(crate, link_base),
-        "links": links,
-        "entity_total": len([n for n in crate.graph if n.get("@id") != METADATA_FILENAME]),
-        "source": os.path.basename(crate.path) if crate.path else "",
-        "generated_at": generated_at or _dt.datetime.now().strftime("%Y-%m-%d %H:%M"),
-    }
+    return DatasheetPage(
+        kicker="Datasheet",
+        title=meta.name or "RO-Crate",
+        ark=meta.id,
+        ark_href=meta.id_href,
+        chips=meta.keywords[:12],
+        badges=badges(meta),
+        body_class="has-nav",
+        nav=navigation(composition, bool(use_case_rows), bool(review_summary)),
+        summary=summary(crate, composition),
+        review=review_summary,
+        overview=overview(crate, meta),
+        regulatory=regulatory(crate),
+        use_cases=use_case_rows,
+        composition=CompositionSection(cards=composition.cards,
+                                       is_release=composition.is_release),
+        distribution=distribution(meta),
+        links=links if isinstance(links, Links) else Links(**(links or {})),
+        source=os.path.basename(crate.path) if crate.path else "",
+        generated_at=generated_at or _dt.datetime.now().strftime("%Y-%m-%d %H:%M"),
+    )

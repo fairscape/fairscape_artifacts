@@ -6,10 +6,11 @@ access, what it took as input, and the shape of the work done in it
 ("Sample -> raw", "h5 -> h5ad"). A crate with no constituents is summarised
 the same way, as a single card for itself.
 
-Python computes plain data here — counts, tallies, rows, hrefs — and the
-templates render it. The patterns in particular used to be HTML fragments
-dropped in with `| safe`; they are now structured (`inputs`/`outputs`
-lists) so crate-authored text never bypasses autoescaping.
+A card's descriptive metadata is a `CrateMetadata` read from the
+constituent's own root, with the release root's stub filling gaps. The
+counts and patterns come from walking the constituent's entities against
+the release-wide index, so an input that lives in a sibling crate is
+attributed to it by name.
 """
 
 from __future__ import annotations
@@ -17,12 +18,16 @@ from __future__ import annotations
 import os
 from collections import Counter
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 from fairscape_artifacts import fields as f
 from fairscape_artifacts import outputs as outputs_mod
-from fairscape_artifacts.crate import (Crate, METADATA_FILENAME, SubCrate,
-                                       generated_by_ids, ref_ids, replaces)
+from fairscape_artifacts.crate import (Crate, METADATA_FILENAME, OUTPUT_FIELDS, SubCrate,
+                                       generated_ids, generated_index, has_provenance,
+                                       ref_ids, replaces, stored_generated_ids)
+from fairscape_artifacts.models import (Card, CellLine, ContentRow, CrateMetadata, Details,
+                                        Pattern, PatternInput, Patterns, Statistics, Tally,
+                                        tally)
 
 PREVIEW_HTML = "ro-crate-preview.html"
 GRAPH_HTML = "ro-crate-evidence-graph.html"
@@ -34,7 +39,7 @@ PATTERN_LIMIT = 12
 @dataclass
 class Item:
     """One composition card, plus what the CLI needs to write its preview."""
-    context: Dict[str, Any]
+    card: Card
     crate: Crate
     rel_dir: str                 # POSIX, relative to the release crate dir
     preview_path: str = ""       # absolute; "" when previews are off
@@ -43,7 +48,7 @@ class Item:
 @dataclass
 class Composition:
     items: List[Item] = field(default_factory=list)
-    index: Dict[str, Dict[str, Any]] = field(default_factory=dict)
+    index: Dict[str, dict] = field(default_factory=dict)
     owner: Dict[str, str] = field(default_factory=dict)
     #: crate root id -> display name, for showing `owner`
     names: Dict[str, str] = field(default_factory=dict)
@@ -52,6 +57,10 @@ class Composition:
     @property
     def crates(self) -> List[Crate]:
         return [item.crate for item in self.items]
+
+    @property
+    def cards(self) -> List[Card]:
+        return [item.card for item in self.items]
 
 
 # -- cross-crate index -------------------------------------------------------
@@ -67,7 +76,7 @@ def build_index(crate: Crate, subcrates: List[SubCrate]):
     of it, which is why sub-crates are indexed last; between two full
     copies, the one with provenance wins (`crate.replaces`).
     """
-    index: Dict[str, Dict[str, Any]] = {}
+    index: Dict[str, dict] = {}
     owner: Dict[str, str] = {}
     names: Dict[str, str] = {crate.root_id: crate.name}
     for node in crate.graph:
@@ -90,17 +99,6 @@ def build_index(crate: Crate, subcrates: List[SubCrate]):
 
 # -- per-crate details -------------------------------------------------------
 
-def _entities(crate: Crate):
-    """Data entities of one crate: no descriptor, no root, no stubs."""
-    for node in crate.graph:
-        nid = node.get("@id")
-        if nid == METADATA_FILENAME or nid == crate.root_id:
-            continue
-        if f.is_subcrate_stub(node):
-            continue
-        yield node
-
-
 #: Display order and label for each kind in a single crate's contents table.
 KIND_LABELS = (
     ("dataset", "Dataset"),
@@ -116,78 +114,42 @@ KIND_LABELS = (
 )
 
 
-def contents(crate: Crate, link_base: str = "") -> List[Dict[str, Any]]:
+def _content_url(node) -> str:
+    url = node.get("contentUrl")
+    if isinstance(url, list):
+        url = url[0] if url else None
+    return f.http_url(url)
+
+
+def contents(crate: Crate, link_base: str = "") -> List[ContentRow]:
     """One row per entity in the crate, grouped by kind then by name: what a
     single crate's card lists so its datasheet shows everything it holds,
     not just the counts."""
     order = {kind: i for i, (kind, _) in enumerate(KIND_LABELS)}
     labels = dict(KIND_LABELS)
     rows = []
-    for node in _entities(crate):
+    for node in crate.entities():
         kind = f.bucket(node)
-        if kind not in labels:
-            kind = "other"
         nid = node.get("@id", "")
         name = f.first(node, "name") or nid
         fmt = f.format_label(node)
         status = f.access(node) if kind in ("dataset", "software", "mlmodel") else ""
-        url = node.get("contentUrl")
-        if isinstance(url, list):
-            url = url[0] if url else None
         description, cut = f.truncate(f.first(node, "description"), 160)
-        rows.append({
-            "kind": labels[kind],
-            "name": name,
-            "id": nid,
-            "id_href": f.ark_href(nid, link_base),
-            "description": description + ("…" if cut else ""),
-            "format": fmt,
-            "size": f.human_size(node.get("contentSize")),
-            "access": status,
-            "access_href": f.http_url(url) if status == "Available" else "",
-            "search": " ".join([name, labels[kind], fmt, nid]).lower(),
-            "_order": (order[kind], name.lower()),
-        })
-    rows.sort(key=lambda r: r["_order"])
-    for row in rows:
-        del row["_order"]
-    return rows
+        rows.append(((order[kind], name.lower()), ContentRow(
+            kind=labels[kind], name=name, id=nid, id_href=f.ark_href(nid, link_base),
+            description=description + ("…" if cut else ""), format=fmt,
+            size=f.human_size(node.get("contentSize")), access=status,
+            access_href=_content_url(node) if status == "Available" else "",
+            search=" ".join([name, labels[kind], fmt, nid]).lower())))
+    rows.sort(key=lambda pair: pair[0])
+    return [row for _, row in rows]
 
 
-def _pattern_key(pattern: Dict[str, Any]) -> str:
-    ins = ";".join(f"{i['crate'] or ''}:{'+'.join(i['formats'])}" for i in pattern["inputs"])
-    return ins + "->" + "+".join(pattern["outputs"])
+# -- work patterns -----------------------------------------------------------
 
-
-# -- what an activity produced -------------------------------------------------
-
-def derived_generated(index) -> Dict[str, List[str]]:
-    """activity id -> the entities naming it in `generatedBy`.
-
-    Most crates record only that declared side; `generated` on the activity
-    is the inverse `link-inverses` adds. Reading both means a crate shows its
-    outputs whether or not that was run, and nothing is written to disk.
-    """
-    out: Dict[str, List[str]] = {}
-    for nid, node in index.items():
-        for producer in generated_by_ids(node):
-            out.setdefault(producer, []).append(nid)
-    return out
-
-
-def stored_generated(node) -> List[str]:
-    return ref_ids(node, "generated", "prov:generated")
-
-
-def generated_ids(node, generated: Dict[str, List[str]]) -> List[str]:
-    """Stored `generated` first, then any `generatedBy` inverse it lacks."""
-    out = stored_generated(node)
-    seen = set(out)
-    for oid in generated.get(node.get("@id", ""), []):
-        if oid not in seen:
-            seen.add(oid)
-            out.append(oid)
-    return out
+def _pattern_key(pattern: Pattern) -> str:
+    ins = ";".join(f"{i.crate or ''}:{'+'.join(i.formats)}" for i in pattern.inputs)
+    return ins + "->" + "+".join(pattern.outputs)
 
 
 def _output_formats(node, index, generated) -> List[str]:
@@ -200,7 +162,7 @@ def _output_formats(node, index, generated) -> List[str]:
 
 
 def _computation_pattern(node, index, owner, here: str, generated,
-                         names: Dict[str, str]) -> Optional[Dict[str, Any]]:
+                         names: Dict[str, str]) -> Optional[Pattern]:
     """`inputs -> outputs` in formats, naming the crate an input came from
     when it is not this one."""
     used = ref_ids(node, "usedDataset")
@@ -221,32 +183,32 @@ def _computation_pattern(node, index, owner, here: str, generated,
     outputs = _output_formats(node, index, generated)
     if not by_crate or not outputs:
         return None
-    inputs = [{"crate": crate_name, "formats": sorted(formats)}
+    inputs = [PatternInput(crate=crate_name, formats=sorted(formats))
               for crate_name, formats in by_crate.items()]
-    inputs.sort(key=lambda i: (i["crate"] or "", i["formats"]))
-    return {"inputs": inputs, "outputs": outputs}
+    inputs.sort(key=lambda i: (i.crate or "", i.formats))
+    return Pattern(inputs=inputs, outputs=outputs)
 
 
-def _experiment_pattern(node, index, generated) -> Optional[Dict[str, Any]]:
+def _experiment_pattern(node, index, generated) -> Optional[Pattern]:
     outputs = _output_formats(node, index, generated)
     if not outputs:
         return None
-    return {"inputs": [{"crate": None, "formats": ["Sample"]}], "outputs": outputs}
+    return Pattern(inputs=[PatternInput(formats=["Sample"])], outputs=outputs)
 
 
-def _fold_patterns(patterns: List[Dict[str, Any]]) -> Dict[str, Any]:
+def _fold_patterns(patterns: List[Pattern]) -> Patterns:
     """Distinct patterns, commonest first, capped at `PATTERN_LIMIT`."""
     counts: Counter = Counter()
-    first_seen: Dict[str, Dict[str, Any]] = {}
+    first_seen: Dict[str, Pattern] = {}
     for pattern in patterns:
         key = _pattern_key(pattern)
         counts[key] += 1
         first_seen.setdefault(key, pattern)
-    rows = [{**first_seen[key], "n": n} for key, n in counts.most_common()]
-    return {"rows": rows[:PATTERN_LIMIT], "more": max(0, len(rows) - PATTERN_LIMIT)}
+    rows = [first_seen[key].model_copy(update={"n": n}) for key, n in counts.most_common()]
+    return Patterns(rows=rows[:PATTERN_LIMIT], more=max(0, len(rows) - PATTERN_LIMIT))
 
 
-def _cell_line(sample, index) -> Optional[Dict[str, str]]:
+def _cell_line(sample, index) -> Optional[CellLine]:
     refs = ref_ids(sample, "cellLineReference", "derivedFrom")
     if not refs:
         return None
@@ -256,12 +218,10 @@ def _cell_line(sample, index) -> Optional[Dict[str, str]]:
     organism_name = f.text(organism) if organism else ""
     if organism_name and organism_name in index:
         organism_name = f.first(index[organism_name], "name") or organism_name
-    return {"id": ref, "name": f.first(target, "name") or ref,
-            "organism": organism_name}
+    return CellLine(id=ref, name=f.first(target, "name") or ref, organism=organism_name)
 
 
-def _input_datasets(crate: Crate, index, owner,
-                    names: Dict[str, str]) -> List[Dict[str, Any]]:
+def _input_datasets(crate: Crate, index, owner, names: Dict[str, str]) -> List[Tally]:
     """What the crate declares (or, failing that, derives) as its inputs,
     tallied by format and, for inputs from another crate, by that crate."""
     here = crate.root_id
@@ -284,64 +244,53 @@ def _input_datasets(crate: Crate, index, owner,
         if kind == "rocrate":
             # An input crate contributes each of its outputs.
             name = f.first(node, "name") or iid
-            for oid in ref_ids(node, "https://w3id.org/EVI#outputs", "EVI:outputs", "outputs"):
+            for oid in ref_ids(node, *OUTPUT_FIELDS):
                 target = index.get(oid)
                 fmt = f.format_label(target) if target else ""
                 labels.append(f"{name} ({fmt})" if fmt else name)
             continue
-        if kind == "sample":
-            label = "Sample"
-        else:
-            label = f.format_label(node) or kind.capitalize()
+        label = "Sample" if kind == "sample" else (f.format_label(node) or kind.capitalize())
         source = owner.get(iid)
         if source and source != here:
             label = f"{names.get(source, source)} ({label})"
         labels.append(label)
-    return f.tally(labels)
+    return tally(labels)
 
 
-def details(crate: Crate, index, owner,
-            generated: Optional[Dict[str, List[str]]] = None,
-            names: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
+def details(crate: Crate, index, owner, generated: Optional[Dict[str, List[str]]] = None,
+            names: Optional[Dict[str, str]] = None) -> Details:
     """Counts, formats, access, inputs and work patterns for one crate."""
     here = crate.root_id
     names = names or {}
     if generated is None:
-        generated = derived_generated(index)
+        generated = generated_index(index)
     counts: Counter = Counter()
     provenance = 0
-    file_formats: List[str] = []
-    software_formats: List[str] = []
-    model_formats: List[str] = []
-    file_access: List[str] = []
-    software_access: List[str] = []
-    computation_patterns: List[Dict[str, Any]] = []
-    experiment_patterns: List[Dict[str, Any]] = []
+    formats: Dict[str, List[str]] = {"dataset": [], "software": [], "mlmodel": []}
+    access: Dict[str, List[str]] = {"dataset": [], "software": []}
+    computation_patterns: List[Pattern] = []
+    experiment_patterns: List[Pattern] = []
     experiment_types: List[str] = []
-    cell_lines: Dict[str, Dict[str, str]] = {}
+    cell_lines: Dict[str, CellLine] = {}
     organisms: List[str] = []
 
-    for node in _entities(crate):
+    for node in crate.entities():
         kind = f.bucket(node)
         if kind == "rocrate":
             continue
         counts[kind] += 1
-        if kind == "dataset":
-            if f.has_provenance(node):
-                provenance += 1
-            file_formats.extend(f.formats_of(node))
-            file_access.append(f.access(node))
-        elif kind == "software":
-            software_formats.extend(f.formats_of(node))
-            software_access.append(f.access(node))
-        elif kind == "mlmodel":
-            model_formats.extend(f.formats_of(node))
+        if kind in formats:
+            formats[kind].extend(f.formats_of(node))
+        if kind in access:
+            access[kind].append(f.access(node))
+        if kind == "dataset" and has_provenance(node):
+            provenance += 1
         elif kind == "sample":
             line = _cell_line(node, index)
             if line:
-                cell_lines.setdefault(line["id"], line)
-                if line["organism"]:
-                    organisms.append(line["organism"])
+                cell_lines.setdefault(line.id, line)
+                if line.organism:
+                    organisms.append(line.organism)
         elif kind == "experiment":
             experiment_types.append(f.first(node, "experimentType") or "Unspecified")
             pattern = _experiment_pattern(node, index, generated)
@@ -354,43 +303,31 @@ def details(crate: Crate, index, owner,
 
     input_datasets = _input_datasets(crate, index, owner, names)
     if not input_datasets and counts["sample"]:
-        input_datasets = [{"label": "Sample", "n": counts["sample"]}]
+        input_datasets = [Tally(label="Sample", n=counts["sample"])]
 
-    return {
-        "files": counts["dataset"],
-        "models": counts["mlmodel"],
-        "software": counts["software"],
-        "instruments": counts["instrument"],
-        "samples": counts["sample"],
-        "experiments": counts["experiment"],
-        "computations": counts["computation"],
-        "schemas": counts["schema"],
-        "other": counts["other"],
-        "activities": counts["computation"] + counts["experiment"],
-        "with_provenance": provenance,
-        "file_formats": f.tally(file_formats),
-        "software_formats": f.tally(software_formats),
-        "model_formats": f.tally(model_formats),
-        "file_access": f.tally(file_access),
-        "software_access": f.tally(software_access),
-        "computation_patterns": _fold_patterns(computation_patterns),
-        "experiment_patterns": _fold_patterns(experiment_patterns),
-        "experiment_types": f.tally(experiment_types),
-        "cell_lines": list(cell_lines.values()),
-        "organisms": f.tally(organisms),
-        "input_datasets": input_datasets,
-        "inputs": sum(row["n"] for row in input_datasets),
-    }
+    return Details(
+        files=counts["dataset"], models=counts["mlmodel"], software=counts["software"],
+        instruments=counts["instrument"], samples=counts["sample"],
+        experiments=counts["experiment"], computations=counts["computation"],
+        schemas=counts["schema"], other=counts["other"], with_provenance=provenance,
+        file_formats=tally(formats["dataset"]), software_formats=tally(formats["software"]),
+        model_formats=tally(formats["mlmodel"]), file_access=tally(access["dataset"]),
+        software_access=tally(access["software"]),
+        computation_patterns=_fold_patterns(computation_patterns),
+        experiment_patterns=_fold_patterns(experiment_patterns),
+        experiment_types=tally(experiment_types), cell_lines=list(cell_lines.values()),
+        organisms=tally(organisms), input_datasets=input_datasets,
+    )
 
 
 def notes(crate: Crate, generated: Dict[str, List[str]]) -> List[str]:
     """What the card filled in that the crate does not store, and the
     command that would store it."""
     out = []
-    for node in _entities(crate):
+    for node in crate.entities():
         if f.bucket(node) not in ("computation", "experiment"):
             continue
-        stored = set(stored_generated(node))
+        stored = set(stored_generated_ids(node))
         if any(oid not in stored for oid in generated.get(node.get("@id", ""), [])):
             out.append("Activity outputs were derived from each output's generatedBy; "
                        "run `fairscape-artifacts link-inverses` to store them.")
@@ -402,7 +339,7 @@ def notes(crate: Crate, generated: Dict[str, List[str]]) -> List[str]:
     return out
 
 
-# -- card metadata -----------------------------------------------------------
+# -- files beside the crate --------------------------------------------------
 
 def _dir_size(path: str) -> int:
     total = 0
@@ -438,32 +375,11 @@ def _href(target_abs: str, crate_dir: str, out_dir: str,
     return os.path.relpath(target, page_dir or out_dir).replace(os.sep, "/")
 
 
-def resolve_authors(root: Dict[str, Any], index) -> List[str]:
-    """Author names, following `{@id}` stubs into the graph."""
-    raw = root.get("author")
-    entries = raw if isinstance(raw, list) else ([raw] if raw else [])
-    names = []
-    for entry in entries:
-        if isinstance(entry, dict):
-            name = f.text(entry.get("name"))
-            if not name and entry.get("@id") in index:
-                name = f.first(index[entry["@id"]], "name")
-            names.append(name or f.text(entry))
-        elif isinstance(entry, str):
-            if entry in index and f.first(index[entry], "name"):
-                names.append(f.first(index[entry], "name"))
-            elif entry.strip():
-                names.append(entry.strip())
-    return [n for n in names if n]
-
-
-def summary_statistics(crate: Crate, rel_dir: str, crate_dir: str, out_dir: str,
-                       page_dir: Optional[str] = None):
+def summary_statistics(crate: Crate, crate_dir: str, out_dir: str,
+                       page_dir: Optional[str] = None) -> Optional[Statistics]:
     """The QC / summary-statistics report a crate points at, as a link."""
     refs = ref_ids(crate.root, "hasSummaryStatistics")
-    if not refs:
-        return None
-    target = crate.get(refs[0])
+    target = crate.get(refs[0]) if refs else None
     if not target:
         return None
     url = target.get("contentUrl")
@@ -473,22 +389,50 @@ def summary_statistics(crate: Crate, rel_dir: str, crate_dir: str, out_dir: str,
         return None
     name = f.first(target, "name") or "Summary statistics"
     if url.startswith(("http://", "https://")):
-        return {"name": name, "href": url}
+        return Statistics(name=name, href=url)
     local = crate.file_path(target)
     if local:
-        return {"name": name, "href": _href(local, crate_dir, out_dir, page_dir)}
+        return Statistics(name=name, href=_href(local, crate_dir, out_dir, page_dir))
     return None
 
 
-def card(crate: Crate, *, stub: Optional[Dict[str, Any]], main_root: Dict[str, Any],
-         rel_dir: str, index, owner, crate_dir: str, out_dir: str,
-         link_base: str, preview: bool, position: int,
-         generated: Optional[Dict[str, List[str]]] = None,
-         names: Optional[Dict[str, str]] = None,
-         page_dir: Optional[str] = None,
-         list_contents: bool = False,
-         published: bool = True) -> Dict[str, Any]:
-    """Template context for one composition card.
+def _evidence_href(crate: Crate, root: dict, *, rel_dir: str, sub_dir_abs: str,
+                   crate_dir: str, out_dir: str, page_dir: Optional[str],
+                   link_base: str, published: bool) -> str:
+    """Where a card's provenance graph is: one this run wrote, one already
+    beside the crate, or the `localEvidenceGraph` the metadata names."""
+    if published:
+        # a graph this run wrote first, then one already beside the crate
+        for candidate in ((os.path.join(out_dir, rel_dir, GRAPH_HTML) if rel_dir else ""),
+                          os.path.join(sub_dir_abs, GRAPH_HTML)):
+            if candidate and os.path.exists(candidate):
+                return _href(candidate, crate_dir, out_dir, page_dir)
+    local_graph = ref_ids(root, "localEvidenceGraph")
+    if not local_graph:
+        return ""
+    target = local_graph[0]
+    if not target.endswith(".html"):
+        return f.ark_href(target, link_base)
+    if not published:
+        return ""
+    # Written relative to the release (CM4AI writes it that way on the stub
+    # *and* on the constituent's own root) or to the constituent: take
+    # whichever holds the file, else the constituent's directory when its
+    # own root carries it.
+    candidates = [os.path.join(sub_dir_abs, target), os.path.join(crate_dir, target)]
+    found = [c for c in candidates if os.path.exists(c)]
+    fallback = candidates[0] if ref_ids(crate.root, "localEvidenceGraph") else candidates[1]
+    return _href(found[0] if found else fallback, crate_dir, out_dir, page_dir)
+
+
+# -- cards -------------------------------------------------------------------
+
+def card(crate: Crate, *, stub: Optional[dict], main: CrateMetadata, rel_dir: str,
+         index, owner, crate_dir: str, out_dir: str, link_base: str, preview: bool,
+         position: int, generated: Optional[Dict[str, List[str]]] = None,
+         names: Optional[Dict[str, str]] = None, page_dir: Optional[str] = None,
+         list_contents: bool = False, published: bool = True) -> Card:
+    """One composition card.
 
     `list_contents` adds a row per entity (`contents`); `build` sets it for
     a crate with no constituents, whose one card is the whole composition.
@@ -499,110 +443,61 @@ def card(crate: Crate, *, stub: Optional[Dict[str, Any]], main_root: Dict[str, A
     to it, since the only directory to look in is the release's own.
 
     The sub-crate's own root wins; the release root's stub fills gaps; the
-    release root itself supplies a DOI and publications when neither has
-    them, since constituent crates usually inherit those.
+    release root itself (`main`) supplies a DOI and publications when
+    neither has them, since constituent crates usually inherit those.
     """
-    root: Dict[str, Any] = {}
+    root: dict = {}
     for source in (stub or {}, crate.root):
         for key, value in source.items():
             if value not in (None, "", [], {}):
                 root[key] = value
+    meta = CrateMetadata.read(root, index, link_base)
+    if stub:
+        inherited = {}
+        if not meta.identifier:
+            inherited.update(identifier_label=main.identifier_label, identifier=main.identifier,
+                             identifier_href=main.identifier_href)
+        if not meta.publications:
+            inherited.update(publications=main.publications)
+        meta = meta.model_copy(update=inherited)
 
     sub_dir_abs = os.path.normpath(os.path.join(crate_dir, rel_dir)) if rel_dir else crate_dir
-
-    size = f.human_size(root.get("contentSize"))
+    size = meta.size
     if not size and published and os.path.isdir(sub_dir_abs):
         size = f.human_size(_dir_size(sub_dir_abs))
 
-    id_label, doi, doi_href = f.identifier(root.get("identifier"), link_base)
-    if not doi and stub:
-        id_label, doi, doi_href = f.identifier(main_root.get("identifier"), link_base)
-    pubs = f.publications(root.get("associatedPublication"))
-    if not pubs and stub:
-        pubs = f.publications(main_root.get("associatedPublication"))
-
-    evidence_href = ""
-    # a graph this run wrote first, then one already beside the crate
-    on_disk = ((os.path.join(out_dir, rel_dir, GRAPH_HTML) if rel_dir else "",
-                os.path.join(sub_dir_abs, GRAPH_HTML)) if published else ())
-    for candidate in on_disk:
-        if candidate and os.path.exists(candidate):
-            evidence_href = _href(candidate, crate_dir, out_dir, page_dir)
-            break
-    if not evidence_href:
-        local_graph = ref_ids(root, "localEvidenceGraph")
-        if local_graph:
-            target = local_graph[0]
-            if target.endswith(".html") and not published:
-                pass
-            elif target.endswith(".html"):
-                # Written relative to the release (CM4AI writes it that way on
-                # the stub *and* on the constituent's own root) or to the
-                # constituent: take whichever holds the file, else the
-                # constituent's directory when its own root carries it.
-                candidates = [os.path.join(sub_dir_abs, target), os.path.join(crate_dir, target)]
-                found = [c for c in candidates if os.path.exists(c)]
-                fallback = candidates[0] if ref_ids(crate.root, "localEvidenceGraph") else candidates[1]
-                evidence_href = _href(found[0] if found else fallback, crate_dir, out_dir, page_dir)
-            else:
-                evidence_href = f.ark_href(target, link_base)
-
+    evidence_href = _evidence_href(crate, root, rel_dir=rel_dir, sub_dir_abs=sub_dir_abs,
+                                   crate_dir=crate_dir, out_dir=out_dir, page_dir=page_dir,
+                                   link_base=link_base, published=published)
     preview_href = ""
     if preview and published:
         preview_href = _href(os.path.join(out_dir, rel_dir, PREVIEW_HTML),
                              out_dir, out_dir, page_dir)
 
-    keywords = f.keywords(root)
     if generated is None:
-        generated = derived_generated(index)
+        generated = generated_index(index)
     det = details(crate, index, owner, generated, names)
-    search = " ".join([root.get("name", ""), " ".join(keywords),
-                       " ".join(row["label"] for row in det["file_formats"])]).lower()
-
-    return {
-        "position": position,
-        "anchor": f"subcrate-{position}",
-        "name": crate.name,
-        "id": crate.root_id,
-        "id_href": f.ark_href(crate.root_id, link_base),
-        "description": f.first(root, "description"),
-        "authors": ", ".join(resolve_authors(root, index)),
-        "keywords": keywords,
-        "date": f.date_only(f.first(root, "datePublished", "dateCreated", "dateModified")),
-        "version": f.first(root, "version"),
-        "size": size,
-        "publisher": f.text(f.resolved(root.get("publisher"), index)),
-        "doi": doi,
-        "doi_href": doi_href,
-        "identifier_label": id_label or "DOI",
-        "contact": f.first(root, "contactEmail"),
-        "contact_href": f.link_href(root.get("contactEmail")),
-        "copyright": f.first(root, "copyrightNotice"),
-        "license": f.first(root, "license"),
-        "license_href": f.http_url(root.get("license")),
-        "terms_of_use": f.first(root, "conditionsOfAccess"),
-        "terms_href": f.http_url(root.get("conditionsOfAccess")),
-        "confidentiality": f.first(root, "confidentialityLevel"),
-        "funder": f.joined(root.get("funder")),
-        "md5": f.first(root, "MD5", "md5"),
-        "publications": pubs,
-        "access_href": f.http_url(root.get("contentUrl")) or f.http_url(root.get("url"))
-                       or f.http_url(root.get("sameAs")),
-        "evidence_href": evidence_href,
-        "evidence_label": ("Open" if evidence_href.startswith(("http://", "https://"))
-                           else os.path.basename(evidence_href)) if evidence_href else "",
-        "preview_href": preview_href,
-        "statistics": summary_statistics(crate, rel_dir, crate_dir, out_dir, page_dir),
-        "metadata_path": "/".join(p for p in (rel_dir, METADATA_FILENAME) if p),
-        "details": det,
-        "contents": contents(crate, link_base) if list_contents else [],
-        "notes": notes(crate, generated) if published else [
+    return Card(
+        position=position,
+        anchor=f"subcrate-{position}",
+        meta=meta,
+        size=size,
+        evidence_href=evidence_href,
+        evidence_label=("Open" if evidence_href.startswith(("http://", "https://"))
+                        else os.path.basename(evidence_href)) if evidence_href else "",
+        preview_href=preview_href,
+        statistics=summary_statistics(crate, crate_dir, out_dir, page_dir),
+        metadata_path="/".join(p for p in (rel_dir, METADATA_FILENAME) if p),
+        details=det,
+        contents=contents(crate, link_base) if list_contents else [],
+        notes=notes(crate, generated) if published else [
             "This sub-crate's own metadata is not published with the release "
             "(access to its data is controlled), so only the release's "
             "description of it is shown; its contents are not counted."],
-        "published": published,
-        "search": search,
-    }
+        published=published,
+        search=" ".join([meta.name, " ".join(meta.keywords),
+                         " ".join(row.label for row in det.file_formats)]).lower(),
+    )
 
 
 # -- entry point ---------------------------------------------------------------
@@ -617,27 +512,23 @@ def build(crate: Crate, *, out_dir: str, link_base: str = "",
     crate_dir = crate.dir or out_dir
     subcrates = crate.sub_crates()
     index, owner, names = build_index(crate, subcrates)
-    generated = derived_generated(index)
+    generated = generated_index(index)
+    main = CrateMetadata.read(crate.root, index, link_base)
     comp = Composition(index=index, owner=owner, names=names, is_release=bool(subcrates))
+    shared = dict(main=main, index=index, owner=owner, crate_dir=crate_dir, out_dir=out_dir,
+                  link_base=link_base, preview=previews, generated=generated, names=names,
+                  page_dir=page_dir)
 
     if subcrates:
         for position, sub in enumerate(subcrates, start=1):
-            context = card(sub.crate, stub=sub.stub, main_root=crate.root,
-                           rel_dir=sub.rel_dir, index=index, owner=owner,
-                           crate_dir=crate_dir, out_dir=out_dir, link_base=link_base,
-                           preview=previews, position=position, generated=generated,
-                           names=names, page_dir=page_dir, published=sub.published)
+            item = card(sub.crate, stub=sub.stub, rel_dir=sub.rel_dir, position=position,
+                        published=sub.published, **shared)
             preview_path = (os.path.join(out_dir, sub.rel_dir, PREVIEW_HTML)
                             if previews and sub.published else "")
-            comp.items.append(Item(context=context, crate=sub.crate,
-                                   rel_dir=sub.rel_dir, preview_path=preview_path))
+            comp.items.append(Item(card=item, crate=sub.crate, rel_dir=sub.rel_dir,
+                                   preview_path=preview_path))
     else:
-        context = card(crate, stub=None, main_root=crate.root, rel_dir="",
-                       index=index, owner=owner, crate_dir=crate_dir, out_dir=out_dir,
-                       link_base=link_base, preview=previews, position=1,
-                       generated=generated, names=names, page_dir=page_dir,
-                       list_contents=True)
+        item = card(crate, stub=None, rel_dir="", position=1, list_contents=True, **shared)
         preview_path = os.path.join(out_dir, PREVIEW_HTML) if previews else ""
-        comp.items.append(Item(context=context, crate=crate, rel_dir="",
-                               preview_path=preview_path))
+        comp.items.append(Item(card=item, crate=crate, rel_dir="", preview_path=preview_path))
     return comp

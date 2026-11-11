@@ -28,6 +28,9 @@ SUBCRATE_PATH_FIELD = "ro-crate-metadata"
 #: itself link onward). Cycles are cut by metadata path regardless.
 LINKED_DEPTH = 4
 
+#: Where a crate root records what it produced, in precedence order.
+OUTPUT_FIELDS = ("https://w3id.org/EVI#outputs", "EVI:outputs", "outputs")
+
 #: Reference fields whose values are `{"@id": ...}` (or lists/strings thereof).
 REF_FIELDS = (
     "hasPart", "EVI:outputs", "outputs",
@@ -67,24 +70,24 @@ def has_type(node: Dict[str, Any], *names: str) -> bool:
     return any(n in types for n in names)
 
 
-def ref_ids(node: Dict[str, Any], *fields: str) -> List[str]:
-    """Collect `@id` strings out of one or more reference fields.
+def ids_of(value: Any) -> List[str]:
+    """The `@id`s a reference-valued field points at.
 
     Tolerates every shape crates use in practice: a bare string, a single
     `{"@id": ...}`, a list of either, or the field being absent.
     """
-    ids: List[str] = []
-    for field in fields:
-        value = node.get(field)
-        if value is None:
-            continue
-        items = value if isinstance(value, list) else [value]
-        for item in items:
-            if isinstance(item, str):
-                ids.append(item)
-            elif isinstance(item, dict) and item.get("@id"):
-                ids.append(item["@id"])
-    return ids
+    items = value if isinstance(value, list) else [value]
+    out: List[str] = []
+    for item in items:
+        ref = item.get("@id") if isinstance(item, dict) else item
+        if isinstance(ref, str) and ref:
+            out.append(ref)
+    return out
+
+
+def ref_ids(node: Dict[str, Any], *fields: str) -> List[str]:
+    """`ids_of` over one or more fields of a node, in order."""
+    return [ref for field in fields for ref in ids_of(node.get(field))]
 
 
 @dataclass
@@ -377,13 +380,13 @@ class Crate:
     def get(self, node_id: str) -> Optional[Dict[str, Any]]:
         return self.index.get(node_id)
 
-    def of_type(self, *names: str) -> Iterable[Dict[str, Any]]:
-        """Every non-descriptor node carrying one of `names` as a type."""
+    def entities(self) -> Iterable[Dict[str, Any]]:
+        """The crate's data entities: no descriptor, no root, no crate stubs."""
         for node in self.graph:
-            if node.get("@id") == METADATA_FILENAME:
+            nid = node.get("@id")
+            if nid in (METADATA_FILENAME, self.root_id) or node.get(SUBCRATE_PATH_FIELD):
                 continue
-            if has_type(node, *names):
-                yield node
+            yield node
 
     def file_path(self, node: Dict[str, Any]) -> Optional[str]:
         """Absolute path for a node's `contentUrl`, if it resolves locally.
@@ -422,8 +425,7 @@ def has_provenance(node: Dict[str, Any]) -> bool:
     bare copy or a stub of it leaves out."""
     if node.get(SUBCRATE_PATH_FIELD):
         return False
-    fields = (GENERATED_BY_FIELDS + DERIVED_FROM_FIELDS + USED_FIELDS + PROV_USED_FIELDS)
-    return any(ref_ids(node, field) for field in fields)
+    return bool(ref_ids(node, *_PROVENANCE_FIELDS))
 
 
 def replaces(existing: Dict[str, Any], candidate: Dict[str, Any]) -> bool:
@@ -478,6 +480,11 @@ USED_FIELDS = ("usedDataset", "usedSoftware", "usedSample",
 #: the same fallback `prov:wasGeneratedBy` gets on the generation side, and
 #: the field the viewer actually draws.
 PROV_USED_FIELDS = ("prov:used", "used", f"{_PROV_NS}used")
+#: Every spelling that says an entity came from somewhere or an activity
+#: consumed something; `has_provenance` reads all of them.
+_PROVENANCE_FIELDS = (GENERATED_BY_FIELDS + ("EVI:generatedBy", "evi:generatedBy",
+                                             "https://w3id.org/EVI#generatedBy")
+                      + DERIVED_FROM_FIELDS + USED_FIELDS + PROV_USED_FIELDS)
 #: PROV specialization: the SUBJECT is the more specialized entity (PROV-DM
 #: §5.5.1), the object its general stand-in. In CPM crates this is the only
 #: link between the backbone and the domain layer.
@@ -573,3 +580,33 @@ def provenance_edge(node: Dict[str, Any]) -> Tuple[Optional[str], List[str]]:
     if derived:
         return "derivedFrom", derived
     return None, []
+
+
+def generated_index(index: Dict[str, Dict[str, Any]]) -> Dict[str, List[str]]:
+    """activity id -> the entities naming it in `generatedBy`.
+
+    Most crates record only that declared side; `generated` on the activity
+    is the inverse `link-inverses` adds. Reading both means a crate shows its
+    outputs whether or not that was run, and nothing is written to disk.
+    """
+    out: Dict[str, List[str]] = {}
+    for nid, node in index.items():
+        for producer in generated_by_ids(node):
+            out.setdefault(producer, []).append(nid)
+    return out
+
+
+def stored_generated_ids(node: Dict[str, Any]) -> List[str]:
+    return ref_ids(node, "generated", "prov:generated")
+
+
+def generated_ids(node: Dict[str, Any], generated: Dict[str, List[str]]) -> List[str]:
+    """What an activity produced: stored `generated` first, then any
+    `generatedBy` inverse (from `generated_index`) it lacks."""
+    out = stored_generated_ids(node)
+    seen = set(out)
+    for oid in generated.get(node.get("@id", ""), []):
+        if oid not in seen:
+            seen.add(oid)
+            out.append(oid)
+    return out

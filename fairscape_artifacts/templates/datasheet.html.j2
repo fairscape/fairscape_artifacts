@@ -1,17 +1,5 @@
 {% extends "base.html.j2" %}
-
-{#- One label/value row of a key-value block. -#}
-{% macro kv(row) -%}
-<div{% if row.id %} id="{{ row.id }}"{% endif %}>
-  <div class="label">{{ row.label }}</div>
-  <div class="value{% if row.kind == 'mono' %} mono{% endif %}">
-    {%- if row.kind == 'missing' %}<span class="missing">{{ row.value }}</span>
-    {%- elif row.kind == 'list' %}<ul class="plain">{% for item in row.entries %}<li>{% if item.href %}<a href="{{ item.href }}" target="_blank" rel="noopener">{{ item.text }}</a>{% else %}{{ item.text }}{% endif %}</li>{% endfor %}</ul>
-    {%- elif row.href %}<a href="{{ row.href }}"{% if row.href.startswith('http') %} target="_blank" rel="noopener"{% endif %}>{{ row.value }}</a>
-    {%- else %}{{ row.value }}{% endif %}
-  </div>
-</div>
-{%- endmacro %}
+{% from "macros.html.j2" import kv %}
 
 {#- A simple label/value pair inside a card, shown only when populated. -#}
 {% macro pair(label, value, href='', mono=false) -%}
@@ -143,10 +131,10 @@
   <div class="reg">
     <h3>Human Subjects &amp; Regulatory</h3>
     <div class="reg-grid">
-      <div><span class="rlabel">Human subjects research</span>{% if regulatory.human_subject_research %}{{ regulatory.human_subject_research }}{% else %}<span class="missing">{{ regulatory.not_specified }}</span>{% endif %}</div>
-      <div><span class="rlabel">De-identified samples</span>{% if regulatory.deidentified %}{{ regulatory.deidentified }}{% else %}<span class="missing">{{ regulatory.not_specified }}</span>{% endif %}</div>
-      <div><span class="rlabel">FDA regulated</span>{% if regulatory.fda_regulated %}{{ regulatory.fda_regulated }}{% else %}<span class="missing">{{ regulatory.not_specified }}</span>{% endif %}</div>
-      <div><span class="rlabel">IRB protocol ID</span>{% if regulatory.irb_protocol_id %}{{ regulatory.irb_protocol_id }}{% else %}<span class="missing">{{ regulatory.not_specified }}</span>{% endif %}</div>
+      <div><span class="rlabel">Human subjects research</span>{% if regulatory.human_subject_research %}{{ regulatory.human_subject_research }}{% else %}<span class="missing">Not specified</span>{% endif %}</div>
+      <div><span class="rlabel">De-identified samples</span>{% if regulatory.deidentified %}{{ regulatory.deidentified }}{% else %}<span class="missing">Not specified</span>{% endif %}</div>
+      <div><span class="rlabel">FDA regulated</span>{% if regulatory.fda_regulated %}{{ regulatory.fda_regulated }}{% else %}<span class="missing">Not specified</span>{% endif %}</div>
+      <div><span class="rlabel">IRB protocol ID</span>{% if regulatory.irb_protocol_id %}{{ regulatory.irb_protocol_id }}{% else %}<span class="missing">Not specified</span>{% endif %}</div>
       <div><span class="rlabel">Institutional review board</span>
         {%- if regulatory.irb is mapping %}
         {%- set irb = regulatory.irb %}
@@ -160,9 +148,9 @@
         <span class="irb-address">{{ [address.get('streetAddress'), address.get('addressLocality'), address.get('addressRegion'), address.get('postalCode'), address.get('addressCountry')]|select|join(', ') }}</span>
         {%- endif %}
         {%- elif regulatory.irb %}{{ regulatory.irb }}
-        {%- else %}<span class="missing">{{ regulatory.not_specified }}</span>{% endif %}
+        {%- else %}<span class="missing">Not specified</span>{% endif %}
       </div>
-      <div><span class="rlabel">Human subjects exemptions</span>{% if regulatory.exemptions %}{{ regulatory.exemptions }}{% else %}<span class="missing">{{ regulatory.not_specified }}</span>{% endif %}</div>
+      <div><span class="rlabel">Human subjects exemptions</span>{% if regulatory.exemptions %}{{ regulatory.exemptions }}{% else %}<span class="missing">Not specified</span>{% endif %}</div>
       {%- if regulatory.informed_consent %}
       <div><span class="rlabel">Informed consent</span>{{ regulatory.informed_consent }}</div>
       {%- endif %}
@@ -250,7 +238,7 @@
       <tbody>
         {%- for item in composition.cards %}
         <tr class="idx-row" data-target="{{ item.anchor }}" data-search="{{ item.search }}">
-          <td><a class="jump" href="#{{ item.anchor }}">{{ item.name }}</a></td>
+          <td><a class="jump" href="#{{ item.anchor }}">{{ item.meta.name }}</a></td>
           <td class="mono nowrap">{{ item.size or '—' }}</td>
           {%- if item.published %}
           <td class="mono nowrap">{{ item.details.files }}</td>
@@ -271,9 +259,10 @@
 
   {%- for item in composition.cards %}
   {%- set d = item.details %}
+  {%- set m = item.meta %}
   <details class="card" id="{{ item.anchor }}" data-search="{{ item.search }}"{% if composition.count == 1 %} open{% endif %}>
     <summary class="card-head">
-      <span class="card-title">{{ item.name }}</span>
+      <span class="card-title">{{ m.name }}</span>
       <span class="card-chips">
         {%- if item.size %}<span class="tag">{{ item.size }}</span>{% endif %}
         {%- if not item.published %}<span class="tag muted">Not published</span>{% else %}
@@ -286,37 +275,37 @@
     </summary>
     <div class="card-body">
       <div class="kv compact">
-        {{ pair('RO-Crate ID', item.id, item.id_href, true) }}
-        {{ pair('Description', item.description) }}
-        {{ pair('Authors', item.authors) }}
-        {{ pair('Date', item.date) }}
-        {{ pair('Version', item.version, '', true) }}
+        {{ pair('RO-Crate ID', m.id, m.id_href, true) }}
+        {{ pair('Description', m.description) }}
+        {{ pair('Authors', m.authors|join(', ')) }}
+        {{ pair('Date', m.date) }}
+        {{ pair('Version', m.version, '', true) }}
         {{ pair('Size', item.size, '', true) }}
-        {{ pair('Publisher', item.publisher) }}
-        {{ pair(item.identifier_label, item.doi, item.doi_href) }}
-        {%- if item.license %}{{ pair('License', item.license, item.license_href) }}{% else %}
+        {{ pair('Publisher', m.publisher) }}
+        {{ pair(m.identifier_label, m.identifier, m.identifier_href) }}
+        {%- if m.license %}{{ pair('License', m.license, m.license_href) }}{% else %}
         <div><div class="label">License</div><div class="value"><span class="missing">Not specified</span></div></div>
         {%- endif %}
-        {{ pair('Keywords', item.keywords|join(', ')) }}
+        {{ pair('Keywords', m.keywords|join(', ')) }}
         {%- if item.statistics %}{{ pair('Statistics / QC report', item.statistics.name, item.statistics.href) }}{% endif %}
         {{ pair('Provenance graph', item.evidence_label, item.evidence_href, true) }}
-        {{ pair('Access', item.access_href, item.access_href) }}
+        {{ pair('Access', m.access_href, m.access_href) }}
       </div>
-      {%- set more = item.contact or item.md5 or item.copyright or item.terms_of_use or item.confidentiality or item.funder or item.publications %}
+      {%- set more = m.contact or m.md5 or m.copyright or m.terms_of_use or m.confidentiality or m.funder or m.publications %}
       {%- if more %}
       <details class="more">
         <summary>More metadata</summary>
         <div class="kv compact">
-          {{ pair('Contact', item.contact, item.contact_href) }}
-          {{ pair('Confidentiality', item.confidentiality) }}
-          {{ pair('Copyright', item.copyright) }}
-          {{ pair('Terms of use', item.terms_of_use, item.terms_href) }}
-          {{ pair('Funding', item.funder) }}
-          {{ pair('MD5', item.md5, '', true) }}
-          {%- if item.publications %}
+          {{ pair('Contact', m.contact, m.contact_href) }}
+          {{ pair('Confidentiality', m.confidentiality) }}
+          {{ pair('Copyright', m.copyright) }}
+          {{ pair('Terms of use', m.terms_of_use, m.terms_href) }}
+          {{ pair('Funding', m.funder) }}
+          {{ pair('MD5', m.md5, '', true) }}
+          {%- if m.publications %}
           <div>
             <div class="label">Related publications</div>
-            <div class="value"><ul class="plain">{% for pub in item.publications %}<li>{{ pub }}</li>{% endfor %}</ul></div>
+            <div class="value"><ul class="plain">{% for pub in m.publications %}<li>{{ pub }}</li>{% endfor %}</ul></div>
           </div>
           {%- endif %}
           {{ pair('Metadata file', item.metadata_path, '', true) }}

@@ -9,12 +9,13 @@ schemas (with their properties) and everything else each get a tab.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 from fairscape_artifacts import fields as f
-from fairscape_artifacts.composition import (_entities, derived_generated, generated_ids,
-                                             resolve_authors, summary_statistics)
-from fairscape_artifacts.crate import Crate, ref_ids
+from fairscape_artifacts.composition import summary_statistics
+from fairscape_artifacts.crate import Crate, generated_ids, generated_index, ref_ids
+from fairscape_artifacts.models import (ComputationDetails, CrateMetadata, Entry, Link,
+                                        PreviewPage, RefRow, Row, SchemaProperty, Tab)
 
 DESCRIPTION_LIMIT = 100
 
@@ -32,21 +33,22 @@ TABS = (
 
 
 def _ref_row(ref_id: str, index, owner, here: str, *, with_format: bool = True,
-             names: Optional[Dict[str, str]] = None):
+             names: Optional[Dict[str, str]] = None) -> RefRow:
     node = index.get(ref_id)
-    row = {"id": ref_id, "name": (f.first(node, "name") if node else "") or ref_id}
-    if with_format:
-        row["format"] = f.format_label(node) if node else ""
     source = owner.get(ref_id)
-    row["crate"] = (names or {}).get(source, source) if source and source != here else ""
-    return row
+    return RefRow(
+        id=ref_id,
+        name=(f.first(node, "name") if node else "") or ref_id,
+        format=f.format_label(node) if node and with_format else "",
+        crate=(names or {}).get(source, source) if source and source != here else "",
+    )
 
 
 def computation_details(node, index, owner, here: str,
                         generated: Optional[Dict[str, List[str]]] = None,
-                        names: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
+                        names: Optional[Dict[str, str]] = None) -> ComputationDetails:
     if generated is None:
-        generated = derived_generated(index)
+        generated = generated_index(index)
     used = ref_ids(node, "usedDataset")
     software = ref_ids(node, "usedSoftware")
     models = ref_ids(node, "usedMLModel")
@@ -57,130 +59,116 @@ def computation_details(node, index, owner, here: str,
     command = node.get("command")
     if isinstance(command, list):
         command = " ".join(str(part) for part in command)
-    return {
-        "inputs": [_ref_row(i, index, owner, here, names=names) for i in used],
-        "outputs": [_ref_row(o, index, owner, here, names=names)
-                    for o in generated_ids(node, generated)],
-        "software": [_ref_row(s, index, owner, here, with_format=False, names=names)
-                     for s in software],
-        "models": [_ref_row(m, index, owner, here, names=names) for m in models],
-        "command": f.text(command),
-        "parameters": f.as_list(node.get("parameter")),
-    }
+    return ComputationDetails(
+        inputs=[_ref_row(i, index, owner, here, names=names) for i in used],
+        outputs=[_ref_row(o, index, owner, here, names=names)
+                 for o in generated_ids(node, generated)],
+        software=[_ref_row(s, index, owner, here, with_format=False, names=names)
+                  for s in software],
+        models=[_ref_row(m, index, owner, here, names=names) for m in models],
+        command=f.text(command),
+        parameters=f.as_list(node.get("parameter")),
+    )
 
 
-def schema_properties(node) -> List[Dict[str, Any]]:
+def schema_properties(node) -> List[SchemaProperty]:
     props = node.get("properties")
     if not isinstance(props, dict):
         return []
-    rows = []
-    for name, spec in props.items():
-        if not isinstance(spec, dict):
-            continue
-        rows.append({
-            "name": name,
-            "type": f.text(spec.get("type")) or "—",
-            "description": f.text(spec.get("description")),
-            "index": spec.get("index", ""),
-        })
-    rows.sort(key=lambda r: (r["index"] == "", r["index"] if isinstance(r["index"], int) else 0))
-    return rows
+    rows = [(spec.get("index", ""), name, spec) for name, spec in props.items()
+            if isinstance(spec, dict)]
+    rows.sort(key=lambda r: (r[0] == "", r[0] if isinstance(r[0], int) else 0))
+    return [SchemaProperty(name=name, type=f.text(spec.get("type")) or "—",
+                           description=f.text(spec.get("description")))
+            for _, name, spec in rows]
 
 
-def _item(node, kind: str, index, owner, here: str, link_base: str,
-          generated: Dict[str, List[str]], names: Dict[str, str]) -> Dict[str, Any]:
+def _entry(node, kind: str, index, owner, here: str, link_base: str,
+           generated: Dict[str, List[str]], names: Dict[str, str]) -> Entry:
     description = f.first(node, "description")
     short, cut = f.truncate(description, DESCRIPTION_LIMIT)
     url = node.get("contentUrl")
     if isinstance(url, list):
         url = url[0] if url else None
     status = f.access(node)
-    item = {
-        "id": node.get("@id", ""),
-        "id_href": f.ark_href(node.get("@id", ""), link_base),
-        "name": f.first(node, "name") or node.get("@id", ""),
-        "description": description,
-        "description_short": short + ("…" if cut else ""),
-        "date": f.date_only(f.first(node, "datePublished", "dateCreated", "datePerformed", "dateModified")),
-        "identifier": f.first(node, "identifier"),
-        "format": f.format_label(node),
-        "size": f.human_size(node.get("contentSize")),
-        "access": status,
-        "access_href": f.http_url(url) if status == "Available" else "",
-        "experiment_type": f.first(node, "experimentType"),
-        "manufacturer": f.first(node, "manufacturer"),
-        "version": f.first(node, "version"),
-        "types": ", ".join(t for t in (f.text(t) for t in
-                                       (node.get("@type") if isinstance(node.get("@type"), list)
-                                        else [node.get("@type")])) if t),
-    }
-    if kind == "computation":
-        item["computation"] = computation_details(node, index, owner, here, generated, names)
-    if kind == "schema":
-        item["properties"] = schema_properties(node)
-    return item
+    types = node.get("@type") if isinstance(node.get("@type"), list) else [node.get("@type")]
+    return Entry(
+        id=node.get("@id", ""),
+        id_href=f.ark_href(node.get("@id", ""), link_base),
+        name=f.first(node, "name") or node.get("@id", ""),
+        description=description,
+        description_short=short + ("…" if cut else ""),
+        date=f.date_only(f.first(node, "datePublished", "dateCreated", "datePerformed",
+                                 "dateModified")),
+        format=f.format_label(node),
+        size=f.human_size(node.get("contentSize")),
+        access=status,
+        access_href=f.http_url(url) if status == "Available" else "",
+        experiment_type=f.first(node, "experimentType"),
+        manufacturer=f.first(node, "manufacturer"),
+        types=", ".join(t for t in (f.text(t) for t in types) if t),
+        computation=(computation_details(node, index, owner, here, generated, names)
+                     if kind == "computation" else None),
+        properties=schema_properties(node) if kind == "schema" else [],
+    )
 
 
-def build_context(crate: Crate, index, owner, *, link_base: str = "",
-                  datasheet_href: str = "", evidence_href: str = "",
-                  source: str = "", generated_at: str = "",
-                  names: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
-    """`owner` maps ids to crate root ids; `names` maps those to the names
-    shown (a crate missing from it is shown by its id)."""
+def build(crate: Crate, index, owner, *, link_base: str = "",
+          datasheet_href: str = "", evidence_href: str = "",
+          source: str = "", generated_at: str = "",
+          names: Optional[Dict[str, str]] = None) -> PreviewPage:
+    """The preview page for `crate`.
+
+    `owner` maps ids to crate root ids; `names` maps those to the names
+    shown (a crate missing from it is shown by its id).
+    """
     here = crate.root_id
     names = names or {}
-    root = crate.root
-    buckets: Dict[str, List[Dict[str, Any]]] = {key: [] for key, _, _ in TABS}
-    generated = derived_generated(index)
-    for node in _entities(crate):
+    buckets: Dict[str, List[Entry]] = {key: [] for key, _, _ in TABS}
+    generated = generated_index(index)
+    for node in crate.entities():
         kind = f.bucket(node)
         if kind == "rocrate":
             kind = "other"
-        buckets[kind].append(_item(node, kind, index, owner, here, link_base, generated, names))
-
-    tabs = [{"key": key, "label": label, "entries": buckets[kind], "n": len(buckets[kind])}
+        buckets[kind].append(_entry(node, kind, index, owner, here, link_base, generated, names))
+    tabs = [Tab(key=key, label=label, entries=buckets[kind])
             for kind, key, label in TABS if buckets[kind]]
 
-    id_label, id_text, id_href = f.identifier(root.get("identifier"), link_base)
-    publisher = f.resolved(root.get("publisher"), index)
+    meta = CrateMetadata.read(crate.root, index, link_base)
+    stats = summary_statistics(crate, crate.dir or "", crate.dir or "")
     rows = [
-        {"label": "RO-Crate ID", "value": crate.root_id, "href": f.ark_href(crate.root_id, link_base), "mono": True},
-        {"label": id_label, "value": id_text, "href": id_href, "mono": id_label == "ARK"},
-        {"label": "Version", "value": f.first(root, "version"), "href": "", "mono": True},
-        {"label": "Release date", "value": f.first(root, "datePublished"), "href": "", "mono": False},
-        {"label": "Date created", "value": f.first(root, "dateCreated"), "href": "", "mono": False},
-        {"label": "Date modified", "value": f.first(root, "dateModified"), "href": "", "mono": False},
-        {"label": "Size", "value": f.human_size(root.get("contentSize")), "href": "", "mono": True},
-        {"label": "Description", "value": f.first(root, "description"), "href": "", "mono": False},
-        {"label": "Authors", "value": ", ".join(resolve_authors(root, index)), "href": "", "mono": False},
-        {"label": "Publisher", "value": f.text(publisher), "href": f.http_url(publisher), "mono": False},
-        {"label": "Principal investigator", "value": f.first(root, "principalInvestigator"), "href": "", "mono": False},
-        {"label": "Contact", "value": f.first(root, "contactEmail"), "href": f.link_href(root.get("contactEmail")), "mono": False},
-        {"label": "License", "value": f.first(root, "license"), "href": f.http_url(root.get("license")), "mono": False},
-        {"label": "Confidentiality level", "value": f.first(root, "confidentialityLevel"), "href": "", "mono": False},
-        {"label": "Keywords", "value": ", ".join(f.keywords(root)), "href": "", "mono": False},
+        Row.of("RO-Crate ID", meta.id, href=meta.id_href, kind="mono"),
+        Row.of(meta.identifier_label, meta.identifier, href=meta.identifier_href,
+               kind="mono" if meta.identifier_label == "ARK" else "text"),
+        Row.of("Version", meta.version, kind="mono"),
+        Row.of("Release date", meta.date_published),
+        Row.of("Date created", meta.date_created),
+        Row.of("Date modified", meta.date_modified),
+        Row.of("Size", meta.size, kind="mono"),
+        Row.of("Description", meta.description),
+        Row.of("Authors", ", ".join(meta.authors)),
+        Row.of("Publisher", meta.publisher, href=meta.publisher_href),
+        Row.of("Principal investigator", meta.principal_investigator),
+        Row.of("Contact", meta.contact, href=meta.contact_href),
+        Row.of("License", meta.license, href=meta.license_href),
+        Row.of("Confidentiality level", meta.confidentiality),
+        Row.of("Keywords", ", ".join(meta.keywords)),
+        Row.of("Quality control report", stats.name, href=stats.href) if stats else None,
+        Row.of("Cite as", kind="list", items=[Link(text=c) for c in meta.citation]),
+        Row.of("Related publications", kind="list",
+               items=[Link(text=p) for p in meta.publications]),
     ]
-    stats = summary_statistics(crate, "", crate.dir or "", crate.dir or "")
-    if stats:
-        rows.append({"label": "Quality control report", "value": stats["name"], "href": stats["href"], "mono": False})
-    rows = [r for r in rows if r["value"]]
 
-    return {
-        "kicker": "RO-Crate preview",
-        "title": crate.name,
-        "ark": crate.root_id,
-        "ark_href": f.ark_href(crate.root_id, link_base),
-        "description": "",
-        "chips": f.keywords(root)[:12],
-        "badges": [],
-        "body_class": "",
-        "rows": rows,
-        "citation": f.publications(root.get("citation")),
-        "publications": f.publications(root.get("associatedPublication")),
-        "tabs": tabs,
-        "entity_total": sum(t["n"] for t in tabs),
-        "datasheet_href": datasheet_href,
-        "evidence_href": evidence_href,
-        "source": source,
-        "generated_at": generated_at,
-    }
+    return PreviewPage(
+        kicker="RO-Crate preview",
+        title=meta.name,
+        ark=meta.id,
+        ark_href=meta.id_href,
+        chips=meta.keywords[:12],
+        rows=[r for r in rows if r],
+        tabs=tabs,
+        datasheet_href=datasheet_href,
+        evidence_href=evidence_href,
+        source=source,
+        generated_at=generated_at,
+    )

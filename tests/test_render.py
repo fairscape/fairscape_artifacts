@@ -56,7 +56,7 @@ def test_crate_text_is_escaped():
         "name": "<script>alert('x')</script>",
         "description": "a & b < c",
     }]}, path=None)
-    html = render.datasheet_html(datasheet.build_context(crate))
+    html = render.datasheet_html(datasheet.build(crate))
     assert "<script>alert('x')</script>" not in html
     assert "&lt;script&gt;" in html
     assert "a &amp; b &lt; c" in html
@@ -67,7 +67,7 @@ def test_crate_text_is_escaped():
 @pytest.mark.parametrize("kind", ["datasheet", "evidence-graph"])
 def test_pages_reference_nothing_external(small_crate, kind):
     if kind == "datasheet":
-        html = render.datasheet_html(datasheet.build_context(small_crate))
+        html = render.datasheet_html(datasheet.build(small_crate))
     else:
         html = render.evidence_graph_html(evidence.build(small_crate),
                                           generated_at="now")
@@ -87,5 +87,5 @@ def test_evidence_graph_page_carries_its_viewer(small_crate):
 
 def test_datasheet_survives_a_crate_with_almost_nothing():
     crate = Crate({"@graph": [{"@id": "./", "@type": "Dataset"}]}, path=None)
-    html = render.datasheet_html(datasheet.build_context(crate))
+    html = render.datasheet_html(datasheet.build(crate))
     assert "<h1>" in html

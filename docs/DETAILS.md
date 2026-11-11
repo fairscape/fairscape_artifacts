@@ -7,8 +7,8 @@ One command turns a local RO-Crate into the things people actually look at:
 an HTML datasheet, an interactive evidence graph, an AI-Ready review, and
 derived input/output links.
 
-Everything runs offline against a crate on disk. No server, no database, and
-`jinja2` is the only required dependency.
+Everything runs offline against a crate on disk. No server, no database;
+`jinja2` and `pydantic` are the only required dependencies.
 
 ```bash
 fairscape-artifacts all path/to/crate
@@ -211,9 +211,12 @@ Without it, every other command works and the datasheet omits the section.
   edited — see `fairscape_artifacts/static/PROVENANCE.md` before touching it.
   `static/style.css` is recovered too; datasheet and preview styling lives in
   `static/datasheet.css`, which is ours to edit.
-* Python computes plain data (`datasheet.py`, `composition.py`, `preview.py`)
-  and the templates hold every angle bracket; crate-authored text is always
-  autoescaped.
+* Every page is a pydantic model (`models.py`): `composition.build` makes
+  the cards, `datasheet.build` and `preview.build` the pages, and `render`
+  hands a page's fields to its template. A crate root's descriptive fields
+  are read once, into `CrateMetadata`, and the hero, overview, distribution,
+  cards and previews all draw on it. The templates hold every angle bracket,
+  so crate-authored text is always autoescaped.
 * Network access is off by default. Pass `--network` to let the grader resolve
   URLs and registries.
 * Building an evidence graph never modifies the crate; if a crate has no

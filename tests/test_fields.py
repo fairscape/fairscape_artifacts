@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 
 from fairscape_artifacts import fields as f
+from fairscape_artifacts.crate import has_provenance
 
 
 def test_normalize_formats_collapses_variants_and_mime_types():
@@ -91,11 +92,14 @@ def test_bucket(node, expected):
 
 
 def test_has_provenance_reads_every_spelling():
-    assert f.has_provenance({"generatedBy": [{"@id": "x"}]})
-    assert f.has_provenance({"prov:wasGeneratedBy": "x"})
-    assert f.has_provenance({"derivedFrom": [{"@id": "x"}]})
-    assert not f.has_provenance({"generatedBy": []})
-    assert not f.has_provenance({})
+    assert has_provenance({"generatedBy": [{"@id": "x"}]})
+    assert has_provenance({"prov:wasGeneratedBy": "x"})
+    assert has_provenance({"evi:generatedBy": [{"@id": "x"}]})
+    assert has_provenance({"derivedFrom": [{"@id": "x"}]})
+    assert not has_provenance({"generatedBy": []})
+    assert not has_provenance({})
+    # a crate stub never counts, whatever it carries
+    assert not has_provenance({"generatedBy": [{"@id": "x"}], "ro-crate-metadata": "a.json"})
 
 
 def test_access_status():

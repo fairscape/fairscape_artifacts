@@ -36,7 +36,7 @@ from __future__ import annotations
 import json
 import os
 import re
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List
 
 from fairscape_artifacts.crate import Crate
 

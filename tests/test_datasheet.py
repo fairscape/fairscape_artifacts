@@ -19,6 +19,7 @@ from conftest import repo_path
 
 from fairscape_artifacts import cli, composition, datasheet, grading, preview, render
 from fairscape_artifacts.crate import Crate
+from fairscape_artifacts.models import Stat
 
 CM4AI = repo_path("CM4AIJuneRelease")
 
@@ -87,58 +88,58 @@ def test_single_crate_is_its_own_card(tiny, tmp_path):
     comp = composition.build(tiny, out_dir=str(tmp_path))
     assert not comp.is_release
     assert len(comp.items) == 1
-    card = comp.items[0].context
-    d = card["details"]
-    assert card["name"] == "Tiny crate"
-    assert card["preview_href"] == "ro-crate-preview.html"
-    assert card["authors"] == "Ada Lovelace"
-    assert (d["files"], d["software"], d["computations"], d["schemas"],
-            d["samples"], d["experiments"], d["other"]) == (3, 1, 1, 1, 1, 1, 3)
-    assert d["with_provenance"] == 2
-    assert {row["label"]: row["n"] for row in d["file_access"]} == {
+    card = comp.items[0].card
+    d = card.details
+    assert card.meta.name == "Tiny crate"
+    assert card.preview_href == "ro-crate-preview.html"
+    assert card.meta.authors == ["Ada Lovelace"]
+    assert (d.files, d.software, d.computations, d.schemas,
+            d.samples, d.experiments, d.other) == (3, 1, 1, 1, 1, 1, 3)
+    assert d.with_provenance == 2
+    assert {row.label: row.n for row in d.file_access} == {
         "Available": 1, "Embargoed": 1, "No link": 1}
-    assert {row["label"] for row in d["file_formats"]} == {"<evil>", "csv", "jpg"}
-    assert d["cell_lines"] == [{"id": "ark:1/line", "name": "MDA-MB-468",
-                                "organism": "Homo sapiens"}]
-    assert d["experiment_types"] == [{"label": "IF", "n": 1}]
-    assert d["experiment_patterns"]["rows"] == [
+    assert {row.label for row in d.file_formats} == {"<evil>", "csv", "jpg"}
+    assert [c.model_dump() for c in d.cell_lines] == [
+        {"id": "ark:1/line", "name": "MDA-MB-468", "organism": "Homo sapiens"}]
+    assert [t.model_dump() for t in d.experiment_types] == [{"label": "IF", "n": 1}]
+    assert [p.model_dump() for p in d.experiment_patterns.rows] == [
         {"inputs": [{"crate": None, "formats": ["Sample"]}], "outputs": ["jpg"], "n": 1}]
-    assert d["computation_patterns"]["rows"] == [
+    assert [p.model_dump() for p in d.computation_patterns.rows] == [
         {"inputs": [{"crate": None, "formats": ["<evil>"]}], "outputs": ["csv"], "n": 1}]
 
 
 def test_single_crate_card_lists_every_entity(tiny, tmp_path):
     """A crate with no constituents shows its contents, not only counts."""
     comp = composition.build(tiny, out_dir=str(tmp_path))
-    rows = comp.items[0].context["contents"]
-    expected = {n["@id"] for n in composition._entities(tiny)}
-    assert {row["id"] for row in rows} == expected
+    rows = comp.items[0].card.contents
+    expected = {n["@id"] for n in tiny.entities()}
+    assert {row.id for row in rows} == expected
     assert tiny.root_id not in expected
-    kinds = [row["kind"] for row in rows]
+    kinds = [row.kind for row in rows]
     assert kinds[0] == "Dataset" and kinds.count("Dataset") == 3
-    html = render.datasheet_html(datasheet.build_context(tiny, composition=comp))
+    html = render.datasheet_html(datasheet.build(tiny, composition=comp))
     assert 'class="index contents"' in html
     assert html.count("<tr data-search=") == len(rows)
 
 
 def test_release_cards_do_not_list_contents(release, tmp_path):
     comp = composition.build(release, out_dir=str(tmp_path))
-    assert all(item.context["contents"] == [] for item in comp.items)
+    assert all(item.card.contents == [] for item in comp.items)
 
 
 def test_derived_inputs_skip_references_outside_the_crate(tiny, tmp_path):
     """A computation that read a scratch file not described in the crate
     must not turn that file into a declared input."""
     tiny.index["ark:1/comp"]["usedDataset"].append({"@id": "#task/scratch"})
-    d = composition.build(tiny, out_dir=str(tmp_path)).items[0].context["details"]
-    labels = {row["label"] for row in d["input_datasets"]}
+    d = composition.build(tiny, out_dir=str(tmp_path)).items[0].card.details
+    labels = {row.label for row in d.input_datasets}
     assert "unresolved reference" not in labels
     assert "Sample" in labels
 
 
 def test_pattern_text_is_escaped_in_the_page(tiny, tmp_path):
     comp = composition.build(tiny, out_dir=str(tmp_path))
-    html = render.datasheet_html(datasheet.build_context(tiny, composition=comp))
+    html = render.datasheet_html(datasheet.build(tiny, composition=comp))
     assert "<evil>" not in html
     assert "&lt;evil&gt;" in html
     assert "Some IRB" in html and "irb@example.org" in html
@@ -157,36 +158,36 @@ def test_release_loads_every_sub_crate(release, tmp_path):
 def test_release_cards_match_the_old_datasheet(release, tmp_path):
     comp = composition.build(release, out_dir=str(tmp_path))
     assert comp.is_release and len(comp.items) == 9
-    apms = comp.items[0].context
-    d = apms["details"]
+    apms = comp.items[0].card
+    d = apms.details
     # The old generator counted the sub-crate's root as a file; 555 is right.
-    assert (d["files"], d["experiments"], d["samples"], d["instruments"],
-            d["schemas"], d["other"]) == (555, 118, 117, 1, 2, 59)
-    assert d["file_formats"][0] == {"label": "raw", "n": 549}
-    assert d["experiment_types"] == [{"label": "AP-MS LFQ", "n": 118}]
-    assert d["cell_lines"][0]["name"] == "MDA-MB-468"
-    assert apms["doi_href"] == "https://doi.org/10.18130/V3/HIGT4C"   # inherited from root
-    assert apms["preview_href"] == "AP-MS/apms-paclitaxel-rocrate/ro-crate-preview.html"
-    assert apms["evidence_label"] == "ro-crate-prov-graph.html"
+    assert (d.files, d.experiments, d.samples, d.instruments,
+            d.schemas, d.other) == (555, 118, 117, 1, 2, 59)
+    assert d.file_formats[0].model_dump() == {"label": "raw", "n": 549}
+    assert [t.model_dump() for t in d.experiment_types] == [{"label": "AP-MS LFQ", "n": 118}]
+    assert d.cell_lines[0].name == "MDA-MB-468"
+    assert apms.meta.identifier_href == "https://doi.org/10.18130/V3/HIGT4C"   # inherited from root
+    assert apms.preview_href == "AP-MS/apms-paclitaxel-rocrate/ro-crate-preview.html"
+    assert apms.evidence_label == "ro-crate-prov-graph.html"
 
-    atlas = comp.items[-1].context
-    pattern = atlas["details"]["computation_patterns"]["rows"][0]
-    assert pattern["inputs"][0]["crate"].startswith("Perturbation Cell Atlas")
-    assert pattern["inputs"][0]["formats"] == ["h5"]
-    assert atlas["details"]["input_datasets"][0]["n"] == 90
-    assert atlas["statistics"]["name"].endswith("Cell Ranger Statistics")
+    atlas = comp.items[-1].card
+    pattern = atlas.details.computation_patterns.rows[0]
+    assert pattern.inputs[0].crate.startswith("Perturbation Cell Atlas")
+    assert pattern.inputs[0].formats == ["h5"]
+    assert atlas.details.input_datasets[0].n == 90
+    assert atlas.statistics.name.endswith("Cell Ranger Statistics")
 
 
 def test_release_summary_trusts_root_counters(release, tmp_path):
     comp = composition.build(release, out_dir=str(tmp_path))
-    context = datasheet.build_context(release, composition=comp)
-    stats = {t["label"]: t["n"] for t in context["summary"]["stats"]}
+    page = datasheet.build(release, composition=comp)
+    stats = {t.label: t.n for t in page.summary.stats}
     assert stats["Total size"] == "19.9 TB"
     assert stats["Datasets"] == "53,877"
-    assert {"label": "sub-crates", "n": "9"} in context["summary"]["extra"]
-    assert context["summary"]["truncated"]
-    assert context["composition"]["show_index"]
-    html = render.datasheet_html(context)
+    assert Stat(label="sub-crates", n="9") in page.summary.extra
+    assert page.summary.truncated
+    assert page.composition.show_index
+    html = render.datasheet_html(page)
     assert 'id="dataset-filter"' in html
     assert html.count('class="idx-row"') == 9
     assert html.count('<details class="card"') == 9
@@ -196,26 +197,25 @@ def test_release_summary_trusts_root_counters(release, tmp_path):
 # -- datasheet context ----------------------------------------------------------
 
 def test_overview_rows_flag_missing_doi_and_license(tiny, tmp_path):
-    context = datasheet.build_context(tiny)
-    rows = {r["label"]: r for r in context["overview"]}
-    assert rows["DOI"]["kind"] == "missing"
-    assert rows["License"]["kind"] == "missing"
-    assert rows["Authors"]["value"] == "Ada Lovelace"
-    assert rows["Publisher"]["href"] == "https://repo.example"
-    assert rows["Conforms To"]["kind"] == "list"
+    rows = {r.label: r for r in datasheet.build(tiny).overview}
+    assert rows["DOI"].kind == "missing"
+    assert rows["License"].kind == "missing"
+    assert rows["Authors"].value == "Ada Lovelace"
+    assert rows["Publisher"].href == "https://repo.example"
+    assert rows["Conforms To"].kind == "list"
     assert "Copyright" not in rows
 
 
 def test_regulatory_reads_fields_without_inventing_defaults(tiny):
     reg = datasheet.regulatory(tiny)
-    assert reg["human_subject_research"] == "None"
-    assert reg["deidentified"] == "Yes"
-    assert reg["fda_regulated"] == ""            # absent stays absent
-    assert reg["irb"]["name"] == "Some IRB"
+    assert reg.human_subject_research == "None"
+    assert reg.deidentified == "Yes"
+    assert reg.fda_regulated == ""            # absent stays absent
+    assert reg.irb["name"] == "Some IRB"
 
 
 def test_use_cases_join_lists_and_fall_back(tiny):
-    rows = {r["label"]: r["value"] for r in datasheet.use_cases(tiny)}
+    rows = {r.label: r.value for r in datasheet.use_cases(tiny)}
     assert rows["Intended Uses"] == "train, test"
     assert rows["Prohibited Uses"] == "clinical use"
     assert rows["Collection Timeframe"] == "1/1/2020 – 2/2/2021"
@@ -223,17 +223,17 @@ def test_use_cases_join_lists_and_fall_back(tiny):
 
 
 def test_summary_counts_the_graph_when_no_counters(tiny):
-    context = datasheet.build_context(tiny)
-    stats = [(t["label"], t["n"]) for t in context["summary"]["stats"]]
+    page = datasheet.build(tiny)
+    stats = [(t.label, t.n) for t in page.summary.stats]
     assert stats == [("Total size", "1.5 KB"), ("Datasets", "3"), ("Computations", "1"),
                      ("Software", "1")]
-    assert context["summary"]["extra"] == [{"label": "samples", "n": "1"},
-                                           {"label": "experiments", "n": "1"},
-                                           {"label": "schemas", "n": "1"}]
-    assert context["summary"]["access_href"] == "https://repo.example/download"
-    assert context["badges"][0]["label"] == "Version 2.0"
-    assert context["review"] is None
-    assert not context["composition"]["show_index"]
+    assert [e.model_dump() for e in page.summary.extra] == [
+        {"label": "samples", "n": "1"}, {"label": "experiments", "n": "1"},
+        {"label": "schemas", "n": "1"}]
+    assert page.summary.access_href == "https://repo.example/download"
+    assert page.badges[0].label == "Version 2.0"
+    assert page.review is None
+    assert not page.composition.show_index
 
 
 def test_review_panel_geometry_draws_points():
@@ -245,24 +245,24 @@ def test_review_panel_geometry_draws_points():
                         {"id": "0.d", "name": "Reusable", "estimate": {"score": "0"}, "evidence": []},
                     ]}]}
     panel = datasheet.review_panel(grading.summarize(presentation))
-    assert panel["estimated"] == 3 and panel["criteria_total"] == 4
+    assert panel.estimated == 3 and panel.criteria_total == 4
     # Two units per criterion: substantive 2, partial 1, hatched review 2, absent 0
     # -> 5 of 8 units drawn, and the 3 filled units are points/possible of the 6 unhatched.
-    assert [s["cls"] for s in panel["donut"]] == ["s2", "s1", "sna"]
-    assert [s["length"] for s in panel["donut"]] == pytest.approx(
-        [panel["circumference"] * u / 8 for u in (2, 1, 2)], abs=0.02)
-    assert panel["donut"][1]["offset"] == pytest.approx(-panel["donut"][0]["length"])
+    assert [s.cls for s in panel.donut] == ["s2", "s1", "sna"]
+    assert [s.length for s in panel.donut] == pytest.approx(
+        [panel.circumference * u / 8 for u in (2, 1, 2)], abs=0.02)
+    assert panel.donut[1].offset == pytest.approx(-panel.donut[0].length)
     # Points follow the rubric's 2/1/0 over estimated criteria only.
-    assert (panel["points"], panel["possible"]) == (3, 6)
-    section = panel["sections"][0]
-    assert section["estimated"] == 3 and section["total"] == 4
-    assert (section["points"], section["possible"]) == (3, 6)
-    assert [s["pct"] for s in section["segments"]] == [25.0, 12.5, 25.0]
-    assert panel["legend"][-1]["label"] == "No points"
+    assert (panel.points, panel.possible) == (3, 6)
+    section = panel.sections[0]
+    assert section.estimated == 3 and section.total == 4
+    assert (section.points, section.possible) == (3, 6)
+    assert [s.pct for s in section.segments] == [25.0, 12.5, 25.0]
+    assert panel.legend[-1].label == "No points"
 
 
 def test_datasheet_page_has_every_section(tiny, tmp_path):
-    html = render.datasheet_html(datasheet.build_context(
+    html = render.datasheet_html(datasheet.build(
         tiny, links={"evidence_graph": "ro-crate-evidence-graph.html"}))
     for section in ("datasheet-summary", "dataset-details", "ai-readiness", "composition",
                     "distribution", "sidebar", "subcrate-1"):
@@ -277,20 +277,20 @@ def test_datasheet_page_has_every_section(tiny, tmp_path):
 
 def test_preview_context_tabs_and_details(tiny, tmp_path):
     comp = composition.build(tiny, out_dir=str(tmp_path))
-    context = preview.build_context(tiny, comp.index, comp.owner)
-    tabs = {t["key"]: t for t in context["tabs"]}
-    assert [t["key"] for t in context["tabs"]] == ["datasets", "software", "computations",
-                                                   "samples", "experiments", "schemas", "other"]
-    comp_item = tabs["computations"]["entries"][0]
-    assert comp_item["computation"]["command"] == "python run.py"
-    assert comp_item["computation"]["inputs"][0]["name"] == "input"
-    assert comp_item["computation"]["outputs"][0]["format"] == "csv"
-    assert comp_item["computation"]["software"][0]["id"] == "ark:1/sw"
-    assert comp_item["date"] == "2026-01-01"
-    props = tabs["schemas"]["entries"][0]["properties"]
-    assert [p["name"] for p in props] == ["a", "b"]         # ordered by index
-    assert tabs["datasets"]["entries"][0]["access"] in ("Available", "Embargoed", "No link")
-    html = render.preview_html(context)
+    page = preview.build(tiny, comp.index, comp.owner)
+    tabs = {t.key: t for t in page.tabs}
+    assert [t.key for t in page.tabs] == ["datasets", "software", "computations",
+                                          "samples", "experiments", "schemas", "other"]
+    comp_item = tabs["computations"].entries[0]
+    assert comp_item.computation.command == "python run.py"
+    assert comp_item.computation.inputs[0].name == "input"
+    assert comp_item.computation.outputs[0].format == "csv"
+    assert comp_item.computation.software[0].id == "ark:1/sw"
+    assert comp_item.date == "2026-01-01"
+    props = tabs["schemas"].entries[0].properties
+    assert [p.name for p in props] == ["a", "b"]         # ordered by index
+    assert tabs["datasets"].entries[0].access in ("Available", "Embargoed", "No link")
+    html = render.preview_html(page)
     assert 'data-tab="computations"' in html
     assert 'class="toggle"' in html
     assert "<evil>" not in html and "&lt;evil&gt;" in html

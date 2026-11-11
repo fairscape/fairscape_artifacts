@@ -76,5 +76,5 @@ def test_evidence_graph_reaches_the_model_through_used_mlmodel():
 
 def test_mlmodel_bucket():
     assert fields.bucket(MODEL) == "mlmodel"
-    assert "mlmodel" in fields.BUCKETS
+    assert fields.bucket({"@type": "https://w3id.org/EVI#MLModel"}) == "mlmodel"
     assert fields.bucket(COHORT) == "dataset"

@@ -24,6 +24,7 @@ from collections import defaultdict
 from typing import Any, Dict, List, Optional, Tuple
 
 from fairscape_artifacts.crate import (
+    OUTPUT_FIELDS,
     generated_by_ids,
     is_computation,
     is_dataset,
@@ -106,9 +107,6 @@ def _backward_chain(dataset_id: str, index: Dict[str, Node]) -> set:
     return visited
 
 
-_OUTPUT_FIELDS = ("https://w3id.org/EVI#outputs", "EVI:outputs", "outputs")
-
-
 def _dependents(index: Dict[str, Node]) -> Dict[str, set]:
     """id -> the ids that point at it: the computations that used it, the
     datasets it generated, and any crate that lists it as an output."""
@@ -118,7 +116,7 @@ def _dependents(index: Dict[str, Node]) -> Dict[str, set]:
             for used in used_dataset_ids(node) + ref_ids(node, "usedSoftware", "usedMLModel"):
                 out[used].add(node_id)
         elif is_rocrate(node):
-            for produced in ref_ids(node, *_OUTPUT_FIELDS):
+            for produced in ref_ids(node, *OUTPUT_FIELDS):
                 out[produced].add(node_id)
         elif is_dataset(node):
             for producer in generated_by_ids(node):

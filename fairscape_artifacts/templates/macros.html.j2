@@ -1,0 +1,12 @@
+{#- One label/value row of a key-value block (a `models.Row`). -#}
+{% macro kv(row) -%}
+<div{% if row.id %} id="{{ row.id }}"{% endif %}>
+  <div class="label">{{ row.label }}</div>
+  <div class="value{% if row.kind == 'mono' %} mono{% endif %}">
+    {%- if row.kind == 'missing' %}<span class="missing">{{ row.value }}</span>
+    {%- elif row.kind == 'list' %}<ul class="plain">{% for item in row.entries %}<li>{% if item.href %}<a href="{{ item.href }}" target="_blank" rel="noopener">{{ item.text }}</a>{% else %}{{ item.text }}{% endif %}</li>{% endfor %}</ul>
+    {%- elif row.href %}<a href="{{ row.href }}"{% if row.href.startswith('http') %} target="_blank" rel="noopener"{% endif %}>{{ row.value }}</a>
+    {%- else %}{{ row.value }}{% endif %}
+  </div>
+</div>
+{%- endmacro %}

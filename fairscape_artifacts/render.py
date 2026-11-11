@@ -20,6 +20,8 @@ from typing import Any, Dict, Optional
 from jinja2 import Environment, FileSystemLoader, StrictUndefined, select_autoescape
 from markupsafe import Markup
 
+from fairscape_artifacts.models import DatasheetPage, Model, PreviewPage
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 TEMPLATE_DIR = os.path.join(HERE, "templates")
 STATIC_DIR = os.path.join(HERE, "static")
@@ -63,18 +65,26 @@ def _render(template_name: str, context: Dict[str, Any]) -> str:
     return _environment().get_template(template_name).render(**context)
 
 
-def datasheet_html(context: Dict[str, Any]) -> str:
-    """Render the datasheet page from a `datasheet.build_context` dict."""
+def _context(page: Model) -> Dict[str, Any]:
+    """A page model's fields, stored and computed, as template variables.
+    Nested models are handed over as they are: the templates read them by
+    attribute, and a name no model defines is a `StrictUndefined` error."""
+    names = list(type(page).model_fields) + list(type(page).model_computed_fields)
+    return {name: getattr(page, name) for name in names}
+
+
+def datasheet_html(page: DatasheetPage) -> str:
+    """Render the datasheet page (see `datasheet.build`)."""
     return _render("datasheet.html.j2", {
-        **context,
+        **_context(page),
         "style_css": Markup(asset("style.css") + "\n" + asset("datasheet.css")),
     })
 
 
-def preview_html(context: Dict[str, Any]) -> str:
-    """Render a crate's preview page from a `preview.build_context` dict."""
+def preview_html(page: PreviewPage) -> str:
+    """Render a crate's preview page (see `preview.build`)."""
     return _render("preview.html.j2", {
-        **context,
+        **_context(page),
         "style_css": Markup(asset("style.css") + "\n" + asset("datasheet.css")),
     })
 

@@ -17,6 +17,7 @@ import pytest
 
 from fairscape_artifacts import composition, datasheet, evidence, render
 from fairscape_artifacts.crate import Crate
+from fairscape_artifacts.models import Stat
 
 EVI = "https://w3id.org/EVI#"
 
@@ -239,26 +240,26 @@ def test_consumer_is_not_rendered_as_a_release(pair, tmp_path):
 def test_composition_names_the_upstream_crate_as_input_origin(pair, tmp_path):
     consumer, _ = pair
     comp = composition.build(consumer, out_dir=str(tmp_path / "consumer"))
-    rows = comp.items[0].context["details"]["computation_patterns"]["rows"]
-    origins = {i["crate"] for row in rows for i in row["inputs"]}
+    rows = comp.items[0].card.details.computation_patterns.rows
+    origins = {i.crate for row in rows for i in row.inputs}
     assert "Upstream run" in origins
 
 
 def test_datasheet_lists_linked_crates(pair, tmp_path):
     consumer, _ = pair
     comp = composition.build(consumer, out_dir=str(tmp_path / "consumer"))
-    context = datasheet.build_context(consumer, composition=comp)
-    linked = next(r for r in context["overview"] if r["id"] == "linked-crates")
-    assert linked["kind"] == "list"
-    assert linked["entries"][0]["text"].startswith("Upstream run (ark:59853/rocrate-upstream-1111111)")
-    assert "2 entities" in linked["entries"][0]["text"]
-    assert {"label": "linked crates", "n": "1"} in context["summary"]["extra"]
-    html = render.datasheet_html(context)
+    page = datasheet.build(consumer, composition=comp)
+    linked = next(r for r in page.overview if r.id == "linked-crates")
+    assert linked.kind == "list"
+    assert linked.entries[0].text.startswith("Upstream run (ark:59853/rocrate-upstream-1111111)")
+    assert "2 entities" in linked.entries[0].text
+    assert Stat(label="linked crates", n="1") in page.summary.extra
+    html = render.datasheet_html(page)
     assert "Linked Crates" in html and "Upstream run" in html
 
 
 def test_datasheet_without_links_has_no_linked_row(tmp_path):
     up = Crate.load(_write(str(tmp_path / "ro-crate-metadata.json"), _upstream_graph()))
-    context = datasheet.build_context(up)
-    assert not [r for r in context["overview"] if r["id"] == "linked-crates"]
-    assert not [e for e in context["summary"]["extra"] if e["label"] == "linked crates"]
+    page = datasheet.build(up)
+    assert not [r for r in page.overview if r.id == "linked-crates"]
+    assert not [e for e in page.summary.extra if e.label == "linked crates"]

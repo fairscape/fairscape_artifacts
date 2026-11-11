@@ -20,6 +20,7 @@ from collections import Counter, deque
 from typing import Any, Callable, Dict, Iterable, List, Optional
 
 from fairscape_artifacts import fields as f
+from fairscape_artifacts.crate import ids_of
 
 INTERPRETATION_JSON = "ro-crate-interpretation.json"
 INTERPRETATION_HTML = "ro-crate-interpretation.html"
@@ -139,7 +140,7 @@ def summarize(aeg: Dict[str, Any], *, link_base: str = "") -> Dict[str, Any]:
         return f.ark_href(node_id, link_base) if node_id else ""
 
     steps = [_step(graph[i], graph, name_of, href)
-             for i in _ref_ids(aeg.get("evi:stepAnnotations")) if i in graph]
+             for i in ids_of(aeg.get("evi:stepAnnotations")) if i in graph]
     steps = _ordered(steps, graph)
     overview = aeg.get("evi:overview") or {}
     # A whole-run computation is not a step of the pipeline: it goes last,
@@ -248,8 +249,8 @@ def _step(node, graph, name_of, href) -> Dict[str, Any]:
             "affected": e.get("affectedOutputs") or "",
             "evidence": _evidence(e.get("evidence"), name_of, href),
         } for e in node.get("evi:errors") or []],
-        "inputs_ids": _ref_ids(comp.get("usedDataset")),
-        "outputs_ids": _ref_ids(comp.get("generated")),
+        "inputs_ids": ids_of(comp.get("usedDataset")),
+        "outputs_ids": ids_of(comp.get("generated")),
     }
 
 
@@ -317,7 +318,7 @@ def _ordered(steps: List[Dict[str, Any]], graph) -> List[Dict[str, Any]]:
         for out in step["outputs_ids"]:
             producer.setdefault(out, step["computation_id"])
     for node_id, node in graph.items():
-        for gen in _ref_ids(node.get("generatedBy")):
+        for gen in ids_of(node.get("generatedBy")):
             producer.setdefault(node_id, gen)
 
     by_comp = {s["computation_id"]: s for s in steps}
@@ -381,7 +382,7 @@ def _headline(step: Dict[str, Any], pipeline_steps: List[str]) -> str:
     the best short text available. Otherwise the step summary's first
     sentence, cut short.
     """
-    token = re.split(r"[\s(]", step["name"].strip(), 1)[0]
+    token = re.split(r"[\s(]", step["name"].strip(), maxsplit=1)[0]
     if len(token) >= 4:
         word = r"\b" + re.escape(token) + r"\b"
         lead = r"^\s*(\d+[a-z]?[.)]\s*)?" + word
@@ -432,18 +433,5 @@ def _paragraphs(text: str) -> List[str]:
 
 
 def _first_ref(value: Any) -> Optional[str]:
-    ids = _ref_ids(value)
+    ids = ids_of(value)
     return ids[0] if ids else None
-
-
-def _ref_ids(value: Any) -> List[str]:
-    if isinstance(value, (dict, str)):
-        value = [value]
-    if not isinstance(value, list):
-        return []
-    out = []
-    for item in value:
-        ref = item.get("@id") if isinstance(item, dict) else item
-        if isinstance(ref, str) and ref:
-            out.append(ref)
-    return out

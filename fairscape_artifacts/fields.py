@@ -9,11 +9,9 @@ Everything here is pure: no I/O, no HTML.
 from __future__ import annotations
 
 import re
-from collections import Counter
 from typing import Any, Dict, List, Optional, Tuple
 
-from fairscape_artifacts.crate import (PROV_TYPE_FALLBACK, evi_short_types,
-                                       ref_ids, short_types)
+from fairscape_artifacts.crate import PROV_TYPE_FALLBACK, evi_short_types, short_types
 
 # -- scalars -----------------------------------------------------------------
 
@@ -210,6 +208,25 @@ def resolved(value: Any, index: Dict[str, Dict[str, Any]]) -> Any:
     return value
 
 
+def authors(root: Dict[str, Any], index: Dict[str, Dict[str, Any]]) -> List[str]:
+    """Author names, following `{@id}` stubs into the graph."""
+    raw = root.get("author")
+    entries = raw if isinstance(raw, list) else ([raw] if raw else [])
+    names = []
+    for entry in entries:
+        if isinstance(entry, dict):
+            name = text(entry.get("name"))
+            if not name and entry.get("@id") in index:
+                name = first(index[entry["@id"]], "name")
+            names.append(name or text(entry))
+        elif isinstance(entry, str):
+            if entry in index and first(index[entry], "name"):
+                names.append(first(index[entry], "name"))
+            elif entry.strip():
+                names.append(entry.strip())
+    return [n for n in names if n]
+
+
 def identifier(value: Any, link_base: str = "") -> Tuple[str, str, str]:
     """`(label, text, href)` for an `identifier`, labelled by what it is.
 
@@ -310,24 +327,9 @@ def access(node: Dict[str, Any]) -> str:
     return "Available"
 
 
-_PROVENANCE_FIELDS = (
-    "generatedBy", "EVI:generatedBy", "evi:generatedBy",
-    "https://w3id.org/EVI#generatedBy",
-    "wasGeneratedBy", "prov:wasGeneratedBy", "http://www.w3.org/ns/prov#wasGeneratedBy",
-    "derivedFrom", "prov:wasDerivedFrom",
-)
-
-
-def has_provenance(node: Dict[str, Any]) -> bool:
-    return bool(ref_ids(node, *_PROVENANCE_FIELDS))
-
-
 # -- classification ----------------------------------------------------------
 
-#: Display buckets, in the order the composition cards use them.
-BUCKETS = ("dataset", "mlmodel", "software", "instrument", "sample", "experiment",
-           "computation", "schema", "other")
-
+#: EVI type -> display bucket.
 _BUCKET_OF = {
     "Dataset": "dataset", "MLModel": "mlmodel", "Software": "software",
     "Instrument": "instrument", "Sample": "sample", "Experiment": "experiment",
@@ -376,14 +378,3 @@ def bucket(node: Dict[str, Any]) -> str:
         if read_as:
             return _BUCKET_OF[read_as]
     return "other"
-
-
-def is_subcrate_stub(node: Dict[str, Any]) -> bool:
-    """A release crate lists its constituent crates as nodes carrying the
-    path of their own metadata file."""
-    return bool(node.get("ro-crate-metadata"))
-
-
-def tally(items: List[str]) -> List[Dict[str, Any]]:
-    """`[{"label", "n"}]`, commonest first, for a list of labels."""
-    return [{"label": label, "n": n} for label, n in Counter(items).most_common()]

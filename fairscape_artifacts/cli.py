@@ -37,6 +37,7 @@ from fairscape_artifacts import inverses as inverses_mod
 from fairscape_artifacts import preview as preview_mod
 from fairscape_artifacts import render
 from fairscape_artifacts.crate import METADATA_FILENAME, Crate, ref_ids
+from fairscape_artifacts.models import Links
 
 DATASHEET_HTML = "ro-crate-datasheet.html"
 PREVIEW_HTML = composition_mod.PREVIEW_HTML
@@ -98,16 +99,16 @@ def _load_review(crate_dir: str, out_dir: str, args) -> Optional[Dict[str, Any]]
         return None
 
 
-def _links(out_dir: str, page_dir: Optional[str] = None) -> Dict[str, str]:
+def _links(out_dir: str, page_dir: Optional[str] = None) -> Links:
     """Companion pages in `out_dir` the datasheet may link to, if they
     exist, relative to where the datasheet is written (`page_dir`)."""
     page_dir = page_dir or out_dir
-    return {key: _rel(os.path.join(out_dir, name), page_dir)
-            if os.path.exists(os.path.join(out_dir, name)) else ""
-            for key, name in (("evidence_graph", GRAPH_HTML), ("graph_json", GRAPH_JSON),
-                              ("review_html", REVIEW_HTML), ("review_json", REVIEW_JSON),
-                              ("interpretation_html", INTERPRETATION_HTML),
-                              ("interpretation_json", INTERPRETATION_JSON))}
+    return Links(**{key: _rel(os.path.join(out_dir, name), page_dir)
+                    if os.path.exists(os.path.join(out_dir, name)) else ""
+                    for key, name in (("evidence_graph", GRAPH_HTML), ("graph_json", GRAPH_JSON),
+                                      ("review_html", REVIEW_HTML), ("review_json", REVIEW_JSON),
+                                      ("interpretation_html", INTERPRETATION_HTML),
+                                      ("interpretation_json", INTERPRETATION_JSON))})
 
 
 def _hint_unresolved(crate, graph: Dict[str, Any]) -> None:
@@ -129,24 +130,33 @@ def _rel(target: str, start_dir: str) -> str:
     return os.path.relpath(target, start_dir).replace(os.sep, "/")
 
 
+def _write_datasheet(crate, comp, review, *, out_dir: str, link_base: str,
+                     target: Optional[str] = None) -> str:
+    """Render the datasheet to `target` (default: beside the other outputs)."""
+    target = target or os.path.join(out_dir, DATASHEET_HTML)
+    page = datasheet_mod.build(crate, composition=comp, review=review, generated_at=_stamp(),
+                               links=_links(out_dir, os.path.dirname(target)),
+                               link_base=link_base)
+    return render.write(target, render.datasheet_html(page))
+
+
 def _write_previews(comp, out_dir: str, path: str, link_base: str,
-                    datasheet_path: Optional[str] = None) -> List[str]:
+                    datasheet_path: str) -> List[str]:
     """One `ro-crate-preview.html` per composition card, beside its crate."""
-    datasheet_path = datasheet_path or os.path.join(out_dir, DATASHEET_HTML)
     written = []
     for item in comp.items:
         if not item.preview_path:
             continue
         preview_dir = os.path.dirname(os.path.abspath(item.preview_path))
-        evidence_href = item.context["evidence_href"]
+        evidence_href = item.card.evidence_href
         if evidence_href and not evidence_href.startswith(("http://", "https://")):
             evidence_href = _rel(os.path.join(out_dir, evidence_href), preview_dir)
-        context = preview_mod.build_context(
+        page = preview_mod.build(
             item.crate, comp.index, comp.owner, names=comp.names, link_base=link_base,
             datasheet_href=_rel(datasheet_path, preview_dir),
             evidence_href=evidence_href,
             source=os.path.basename(item.crate.path or path), generated_at=_stamp())
-        written.append(render.write(item.preview_path, render.preview_html(context)))
+        written.append(render.write(item.preview_path, render.preview_html(page)))
     return written
 
 
@@ -162,11 +172,8 @@ def cmd_datasheet(args) -> List[str]:
     page_dir = os.path.dirname(target)
     comp = composition_mod.build(crate, out_dir=out_dir, link_base=args.link_base,
                                  previews=not args.no_previews, page_dir=page_dir)
-    context = datasheet_mod.build_context(crate, composition=comp, review=review,
-                                          generated_at=_stamp(),
-                                          links=_links(out_dir, page_dir),
-                                          link_base=args.link_base)
-    written = [render.write(target, render.datasheet_html(context))]
+    written = [_write_datasheet(crate, comp, review, out_dir=out_dir,
+                                link_base=args.link_base, target=target)]
     written += _write_previews(comp, out_dir, path, args.link_base, datasheet_path=target)
     return written
 
@@ -352,16 +359,9 @@ def cmd_all(args) -> List[str]:
 
     comp = composition_mod.build(crate, out_dir=out_dir, link_base=args.link_base,
                                  previews=not args.no_previews)
-
-    def render_datasheet(review):
-        context = datasheet_mod.build_context(crate, composition=comp, review=review,
-                                              generated_at=_stamp(), links=_links(out_dir),
-                                              link_base=args.link_base)
-        return render.write(os.path.join(out_dir, DATASHEET_HTML),
-                            render.datasheet_html(context))
-
-    datasheet_path = render_datasheet(None)
-    written += _write_previews(comp, out_dir, path, args.link_base)
+    datasheet_path = _write_datasheet(crate, comp, None, out_dir=out_dir,
+                                      link_base=args.link_base)
+    written += _write_previews(comp, out_dir, path, args.link_base, datasheet_path)
 
     presentation = None
     if not args.no_review:
@@ -376,7 +376,7 @@ def cmd_all(args) -> List[str]:
             print(f"warning: {err}; skipping the AI-Ready review", file=sys.stderr)
 
     if presentation:
-        render_datasheet(presentation)
+        _write_datasheet(crate, comp, presentation, out_dir=out_dir, link_base=args.link_base)
     written.append(datasheet_path)
     return written
 

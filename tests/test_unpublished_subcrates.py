@@ -55,15 +55,15 @@ def test_unpublished_cards_borrow_nothing_from_the_release(tmp_path):
     crate = _release(tmp_path, [_stub("Images", "images"), _stub("EHR", "omop")])
     comp = composition.build(crate, out_dir=str(tmp_path))
     assert comp.is_release
-    cards = [item.context for item in comp.items]
-    assert [c["name"] for c in cards] == ["Images", "EHR"]
+    cards = [item.card for item in comp.items]
+    assert [c.meta.name for c in cards] == ["Images", "EHR"]
     for item, c in zip(comp.items, cards):
-        assert not c["published"]
-        assert c["size"] == "" and c["evidence_href"] == "" and c["preview_href"] == ""
+        assert not c.published
+        assert c.size == "" and c.evidence_href == "" and c.preview_href == ""
         assert item.preview_path == ""
-        assert c["description"].endswith("description")
-        assert c["notes"] and "not published" in c["notes"][0]
-    html = render.datasheet_html(datasheet.build_context(crate, composition=comp))
+        assert c.meta.description.endswith("description")
+        assert c.notes and "not published" in c.notes[0]
+    html = render.datasheet_html(datasheet.build(crate, composition=comp))
     assert html.count("Not published with this release") == 2
     assert "Content summary" not in html
 

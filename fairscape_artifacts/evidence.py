@@ -43,6 +43,7 @@ from fairscape_artifacts.crate import (
     Crate,
     DERIVED_FROM_FIELDS,
     GENERATED_BY_FIELDS,
+    OUTPUT_FIELDS,
     PROV_USED_FIELDS,
     USED_FIELDS,
     derived_from_ids,
@@ -73,12 +74,8 @@ def graph_id_for(node_id: str) -> str:
     return f"{node_id}-evidence-graph"
 
 
-#: Where a crate root records what it produced, in precedence order.
-_OUTPUT_FIELDS = ("https://w3id.org/EVI#outputs", "EVI:outputs", "outputs")
-
-
 def _rocrate_outputs(node: Node) -> List[Dict[str, str]]:
-    for field in _OUTPUT_FIELDS:
+    for field in OUTPUT_FIELDS:
         value = node.get(field)
         if isinstance(value, list):
             return value
@@ -538,7 +535,7 @@ def _rooted_index(crate, target: str, pool: Optional[Iterable[Any]] = None):
         _, derived = io_outputs.ensure(crate)
         if derived:
             root = dict(crate.root)
-            root[io_outputs.EVI_OUTPUTS] = derived
+            root[OUTPUT_FIELDS[0]] = derived
             index[target] = root
     return index, owner, names
 
@@ -558,7 +555,7 @@ def _rooted_index(crate, target: str, pool: Optional[Iterable[Any]] = None):
 #: Every reference field the walk follows, and so every field the domain view
 #: has to rewrite for the substitution to be consistent.
 _REF_FIELDS = (GENERATED_BY_FIELDS + DERIVED_FROM_FIELDS + USED_FIELDS
-               + PROV_USED_FIELDS + _OUTPUT_FIELDS)
+               + PROV_USED_FIELDS + OUTPUT_FIELDS)
 
 
 class SpecializationView:

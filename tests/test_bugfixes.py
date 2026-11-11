@@ -11,6 +11,7 @@ import pytest
 
 from fairscape_artifacts import composition, datasheet, evidence, fields, outputs, preview
 from fairscape_artifacts.crate import Crate
+from fairscape_artifacts.models import CrateMetadata
 
 EVI = "https://w3id.org/EVI#"
 DS = EVI + "Dataset"
@@ -239,13 +240,13 @@ def test_C1_license_badge_and_rows_are_linked():
          "license": {"@id": "https://spdx.org/licenses/MIT", "name": "MIT"},
          "publisher": {"@id": "https://example.org/pub", "name": "Pub"}},
     ]})
-    badge = [b for b in datasheet.badges(crate, "") if b["label"] == "License"][0]
-    assert badge["href"] == "https://spdx.org/licenses/MIT" and badge["title"] == "MIT"
-    ctx = preview.build_context(crate, crate.index, {})
-    rows = {r["label"]: r for r in ctx["rows"]}
-    assert rows["License"]["value"] == "MIT"
-    assert rows["License"]["href"] == "https://spdx.org/licenses/MIT"
-    assert rows["Publisher"]["href"] == "https://example.org/pub"
+    meta = CrateMetadata.read(crate.root, crate.index)
+    badge = [b for b in datasheet.badges(meta) if b.label == "License"][0]
+    assert badge.href == "https://spdx.org/licenses/MIT" and badge.title == "MIT"
+    rows = {r.label: r for r in preview.build(crate, crate.index, {}).rows}
+    assert rows["License"].value == "MIT"
+    assert rows["License"].href == "https://spdx.org/licenses/MIT"
+    assert rows["Publisher"].href == "https://example.org/pub"
 
 
 # -- D1: --link-base links ARKs only ----------------------------------------
@@ -311,25 +312,25 @@ def _uninversed_crate():
 
 def test_C4_preview_lists_outputs_from_generatedBy():
     crate = _uninversed_crate()
-    ctx = preview.build_context(crate, crate.index, {})
-    comps = [t for t in ctx["tabs"] if t["key"] == "computations"][0]["entries"]
-    assert [o["id"] for o in comps[0]["computation"]["outputs"]] == ["ark:1/out"]
+    page = preview.build(crate, crate.index, {})
+    comps = [t for t in page.tabs if t.key == "computations"][0].entries
+    assert [o.id for o in comps[0].computation.outputs] == ["ark:1/out"]
 
 
 def test_C4_card_shows_patterns_and_says_they_were_derived(tmp_path):
     crate = _uninversed_crate()
     comp = composition.build(crate, out_dir=str(tmp_path), previews=False)
-    card = comp.items[0].context
-    rows = card["details"]["computation_patterns"]["rows"]
-    assert rows and rows[0]["outputs"] == ["h5ad"]
-    assert any("link-inverses" in note for note in card["notes"])
+    card = comp.items[0].card
+    rows = card.details.computation_patterns.rows
+    assert rows and rows[0].outputs == ["h5ad"]
+    assert any("link-inverses" in note for note in card.notes)
 
 
 def test_C4_no_note_when_inverses_are_stored(tmp_path):
     crate = _uninversed_crate()
     crate.index["ark:1/run"]["generated"] = [{"@id": "ark:1/out"}]
-    card = composition.build(crate, out_dir=str(tmp_path), previews=False).items[0].context
-    assert not any("link-inverses" in note for note in card["notes"])
+    card = composition.build(crate, out_dir=str(tmp_path), previews=False).items[0].card
+    assert not any("link-inverses" in note for note in card.notes)
 
 
 # -- C5: inputs derived when only outputs are stored ------------------------
@@ -339,9 +340,9 @@ def test_C5_inputs_derived_when_only_outputs_stored(tmp_path):
     crate.root[EVI + "outputs"] = [{"@id": "ark:1/out"}]
     inputs, outs = outputs.ensure(crate)
     assert inputs == [{"@id": "ark:1/in"}] and outs == [{"@id": "ark:1/out"}]
-    card = composition.build(crate, out_dir=str(tmp_path), previews=False).items[0].context
-    assert card["details"]["inputs"] == 1
-    assert any("add-io" in note for note in card["notes"])
+    card = composition.build(crate, out_dir=str(tmp_path), previews=False).items[0].card
+    assert card.details.inputs == 1
+    assert any("add-io" in note for note in card.notes)
 
 
 # ===========================================================================
@@ -428,16 +429,16 @@ def test_D5_local_evidence_graph_on_sub_crate_root_is_sub_relative(tmp_path):
     path = _release_with_sub(tmp_path, sub_root_extra={"localEvidenceGraph": {"@id": "prov.html"}})
     open(str(tmp_path / "release" / "sub" / "prov.html"), "w").write("<html></html>")
     crate = Crate.load(path)
-    card = composition.build(crate, out_dir=crate.dir, previews=False).items[0].context
-    assert card["evidence_href"] == "sub/prov.html"
+    card = composition.build(crate, out_dir=crate.dir, previews=False).items[0].card
+    assert card.evidence_href == "sub/prov.html"
 
 
 def test_D5_local_evidence_graph_on_release_stub_stays_release_relative(tmp_path):
     path = _release_with_sub(tmp_path, stub_extra={"localEvidenceGraph": {"@id": "sub/prov.html"}})
     open(str(tmp_path / "release" / "sub" / "prov.html"), "w").write("<html></html>")
     crate = Crate.load(path)
-    card = composition.build(crate, out_dir=crate.dir, previews=False).items[0].context
-    assert card["evidence_href"] == "sub/prov.html"
+    card = composition.build(crate, out_dir=crate.dir, previews=False).items[0].card
+    assert card.evidence_href == "sub/prov.html"
 
 
 # -- B9: hint when ids are unresolved and the crate is part of a release -----
@@ -480,10 +481,11 @@ def _id_crate(identifier):
 def test_C3_identifier_label_matches_its_kind(identifier, label, href):
     crate = _id_crate(identifier)
     base = "https://fairscape.net"
-    rows = {r["label"]: r for r in preview.build_context(crate, crate.index, {}, link_base=base)["rows"]}
-    assert label in rows and rows[label]["href"] == href
+    rows = {r.label: r for r in preview.build(crate, crate.index, {}, link_base=base).rows}
+    assert label in rows and rows[label].href == href
     assert "DOI" not in rows or label == "DOI"
-    badge_labels = [b["label"] for b in datasheet.badges(crate, base)]
+    meta = CrateMetadata.read(crate.root, crate.index, base)
+    badge_labels = [b.label for b in datasheet.badges(meta)]
     assert label in badge_labels
 
 
@@ -534,10 +536,10 @@ def test_C8_irb_and_publisher_references_resolve():
          "contactPoint": {"email": "irb@ucsd.edu"}},
         {"@id": "#pub", "@type": "Organization", "name": "UC San Diego", "url": "https://ucsd.edu"},
     ]})
-    assert datasheet.regulatory(crate)["irb"]["name"] == "UCSD IRB"
-    rows = {r["label"]: r for r in preview.build_context(crate, crate.index, {})["rows"]}
-    assert rows["Publisher"]["value"] == "UC San Diego"
-    assert rows["Publisher"]["href"] == "https://ucsd.edu"
+    assert datasheet.regulatory(crate).irb["name"] == "UCSD IRB"
+    rows = {r.label: r for r in preview.build(crate, crate.index, {}).rows}
+    assert rows["Publisher"].value == "UC San Diego"
+    assert rows["Publisher"].href == "https://ucsd.edu"
 
 
 # -- C9: release summary counts the release root's own entities -------------
@@ -551,8 +553,8 @@ def test_C9_release_summary_counts_entities_on_the_release_root(tmp_path):
     crate = Crate.load(path)
     comp = composition.build(crate, out_dir=crate.dir, previews=False)
     summary = datasheet.summary(crate, comp)
-    assert summary["entities"] == 4      # 3 in the sub-crate + 1 on the release
-    assert "pdf" in [x.lower() for x in summary["formats"]]
+    assert summary.entities == 4      # 3 in the sub-crate + 1 on the release
+    assert "pdf" in [x.lower() for x in summary.formats]
 
 
 # -- C10: attribution keyed by crate id, not name ---------------------------
@@ -578,11 +580,11 @@ def test_C10_same_named_constituents_still_attribute_cross_crate_inputs(tmp_path
     ]})
     crate = Crate.load(path)
     comp = composition.build(crate, out_dir=str(release), previews=False)
-    b_card = comp.items[1].context
-    assert b_card["details"]["computation_patterns"]["rows"][0]["inputs"][0]["crate"] == "Same"
-    ctx = preview.build_context(comp.items[1].crate, comp.index, comp.owner, names=comp.names)
-    run = [t for t in ctx["tabs"] if t["key"] == "computations"][0]["entries"][0]
-    assert run["computation"]["inputs"][0]["crate"] == "Same"
+    b_card = comp.items[1].card
+    assert b_card.details.computation_patterns.rows[0].inputs[0].crate == "Same"
+    page = preview.build(comp.items[1].crate, comp.index, comp.owner, names=comp.names)
+    run = [t for t in page.tabs if t.key == "computations"][0].entries[0]
+    assert run.computation.inputs[0].crate == "Same"
 
 
 # -- D6: contentUrl paths ---------------------------------------------------
