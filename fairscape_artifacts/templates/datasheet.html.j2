@@ -252,11 +252,15 @@
         <tr class="idx-row" data-target="{{ item.anchor }}" data-search="{{ item.search }}">
           <td><a class="jump" href="#{{ item.anchor }}">{{ item.name }}</a></td>
           <td class="mono nowrap">{{ item.size or '—' }}</td>
+          {%- if item.published %}
           <td class="mono nowrap">{{ item.details.files }}</td>
           <td class="mono nowrap">{{ item.details.activities }}</td>
           <td class="mono nowrap">{{ item.details.with_provenance }} <span class="muted">/ {{ item.details.files }}</span></td>
           <td class="mono nowrap">{{ item.details.schemas }}</td>
           <td class="mono small">{% for fmt in item.details.file_formats %}{{ fmt.label }}{% if not loop.last %}, {% endif %}{% else %}—{% endfor %}</td>
+          {%- else %}
+          <td class="muted small" colspan="5">Not published with this release</td>
+          {%- endif %}
         </tr>
         {%- endfor %}
       </tbody>
@@ -272,7 +276,8 @@
       <span class="card-title">{{ item.name }}</span>
       <span class="card-chips">
         {%- if item.size %}<span class="tag">{{ item.size }}</span>{% endif %}
-        <span class="tag">{{ d.files }} file{{ '' if d.files == 1 else 's' }}</span>
+        {%- if not item.published %}<span class="tag muted">Not published</span>{% else %}
+        <span class="tag">{{ d.files }} file{{ '' if d.files == 1 else 's' }}</span>{% endif %}
         {%- if d.computations %}<span class="tag">{{ d.computations }} computation{{ '' if d.computations == 1 else 's' }}</span>{% endif %}
         {%- if d.models %}<span class="tag">{{ d.models }} ML model{{ '' if d.models == 1 else 's' }}</span>{% endif %}
         {%- if d.experiments %}<span class="tag">{{ d.experiments }} experiment{{ '' if d.experiments == 1 else 's' }}</span>{% endif %}
@@ -319,6 +324,7 @@
       </details>
       {%- endif %}
 
+      {%- if item.published %}
       <h4>Content summary</h4>
       <div class="cards4">
         <div class="ccard">
@@ -356,6 +362,7 @@
           <div class="srow"><b>Other</b> {{ d.other }}</div>
         </div>
       </div>
+      {%- endif %}
       {%- if item.contents %}
       <h4>Contents <span class="muted">({{ item.contents|length }})</span></h4>
       <div class="toolbar">

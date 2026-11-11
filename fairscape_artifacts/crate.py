@@ -99,6 +99,10 @@ class SubCrate:
     stub: Dict[str, Any]      # the node in the parent's graph
     crate: "Crate"            # the sub-crate's own metadata, parsed
     metadata_path: str        # POSIX, relative to the parent crate directory
+    #: False when the sub-crate's own metadata is not published beside the
+    #: release (controlled-access data, say): `crate` is then built from the
+    #: stub alone (`Crate.from_stub`) and `metadata_path` is "".
+    published: bool = True
 
     @property
     def rel_dir(self) -> str:
@@ -135,6 +139,19 @@ class Crate:
             path = os.path.join(path, METADATA_FILENAME)
         with open(path, encoding="utf-8") as handle:
             return cls(json.load(handle), path=path)
+
+    @classmethod
+    def from_stub(cls, stub: Dict[str, Any]) -> "Crate":
+        """A crate known only from the node a release uses to list it.
+
+        The stub is the root and the graph holds nothing else, so the crate
+        has a name, description, license and so on but no entities, and, with
+        no path, no directory, sub-crates or local files.
+        """
+        root = {k: v for k, v in stub.items() if k != SUBCRATE_PATH_FIELD}
+        descriptor = {"@id": METADATA_FILENAME, "@type": "CreativeWork",
+                      "about": {"@id": stub.get("@id", "")}}
+        return cls({"@graph": [descriptor, root]})
 
     # -- root ----------------------------------------------------------
 
@@ -197,10 +214,19 @@ class Crate:
     def _load_stub(self, stub: Dict[str, Any], kind: str) -> Optional["SubCrate"]:
         """Load the crate a stub points at. The pointer is relative to this
         crate's directory; an absolute `localPath` on the stub is the
-        fallback when the relative one no longer resolves."""
+        fallback when the relative one no longer resolves.
+
+        A pointer that resolves to this crate's own metadata file is not the
+        sub-crate: a release whose constituents are not published beside it
+        (controlled-access data) still writes a bare `ro-crate-metadata.json`
+        on each stub, which resolves to the release itself. When nothing
+        loads, a sub-crate is kept, built from its stub (`published=False`),
+        since the release does list it; a linked crate is skipped.
+        """
         rel = str(stub[SUBCRATE_PATH_FIELD]).replace(os.sep, "/")
         while rel.startswith("./"):
             rel = rel[2:]
+        own = os.path.normpath(os.path.abspath(self.path)) if self.path else ""
         full = os.path.normpath(os.path.join(self.dir, rel))
         candidates = [full]
         local = stub.get("localPath")
@@ -208,6 +234,10 @@ class Crate:
             candidates.append(os.path.normpath(local))
         err: Optional[Exception] = None
         for path in candidates:
+            target = os.path.join(path, METADATA_FILENAME) if os.path.isdir(path) else path
+            if own and os.path.normpath(os.path.abspath(target)) == own:
+                err = err or ValueError("points at this crate's own metadata file")
+                continue
             try:
                 sub = Crate.load(path)
             except (OSError, ValueError) as e:
@@ -218,6 +248,11 @@ class Crate:
             # `localPath` resolved, and every link is formed from this path.
             loaded = os.path.relpath(sub.path, self.dir).replace(os.sep, "/")
             return SubCrate(stub=stub, crate=sub, metadata_path=loaded)
+        if kind == "sub-crate":
+            print(f"note: sub-crate {stub.get('@id', rel)!r} is not published here "
+                  f"({err}); described from the release's metadata only", file=sys.stderr)
+            return SubCrate(stub=stub, crate=Crate.from_stub(stub), metadata_path="",
+                            published=False)
         print(f"warning: {kind} {stub.get('@id', rel)!r}: {err}", file=sys.stderr)
         return None
 
