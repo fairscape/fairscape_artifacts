@@ -101,6 +101,59 @@ def _entities(crate: Crate):
         yield node
 
 
+#: Display order and label for each kind in a single crate's contents table.
+KIND_LABELS = (
+    ("dataset", "Dataset"),
+    ("mlmodel", "ML model"),
+    ("software", "Software"),
+    ("computation", "Computation"),
+    ("experiment", "Experiment"),
+    ("sample", "Sample"),
+    ("instrument", "Instrument"),
+    ("schema", "Schema"),
+    ("rocrate", "RO-Crate"),
+    ("other", "Other"),
+)
+
+
+def contents(crate: Crate, link_base: str = "") -> List[Dict[str, Any]]:
+    """One row per entity in the crate, grouped by kind then by name: what a
+    single crate's card lists so its datasheet shows everything it holds,
+    not just the counts."""
+    order = {kind: i for i, (kind, _) in enumerate(KIND_LABELS)}
+    labels = dict(KIND_LABELS)
+    rows = []
+    for node in _entities(crate):
+        kind = f.bucket(node)
+        if kind not in labels:
+            kind = "other"
+        nid = node.get("@id", "")
+        name = f.first(node, "name") or nid
+        fmt = f.format_label(node)
+        status = f.access(node) if kind in ("dataset", "software", "mlmodel") else ""
+        url = node.get("contentUrl")
+        if isinstance(url, list):
+            url = url[0] if url else None
+        description, cut = f.truncate(f.first(node, "description"), 160)
+        rows.append({
+            "kind": labels[kind],
+            "name": name,
+            "id": nid,
+            "id_href": f.ark_href(nid, link_base),
+            "description": description + ("…" if cut else ""),
+            "format": fmt,
+            "size": f.human_size(node.get("contentSize")),
+            "access": status,
+            "access_href": f.http_url(url) if status == "Available" else "",
+            "search": " ".join([name, labels[kind], fmt, nid]).lower(),
+            "_order": (order[kind], name.lower()),
+        })
+    rows.sort(key=lambda r: r["_order"])
+    for row in rows:
+        del row["_order"]
+    return rows
+
+
 def _pattern_key(pattern: Dict[str, Any]) -> str:
     ins = ";".join(f"{i['crate'] or ''}:{'+'.join(i['formats'])}" for i in pattern["inputs"])
     return ins + "->" + "+".join(pattern["outputs"])
@@ -432,8 +485,18 @@ def card(crate: Crate, *, stub: Optional[Dict[str, Any]], main_root: Dict[str, A
          link_base: str, preview: bool, position: int,
          generated: Optional[Dict[str, List[str]]] = None,
          names: Optional[Dict[str, str]] = None,
-         page_dir: Optional[str] = None) -> Dict[str, Any]:
+         page_dir: Optional[str] = None,
+         list_contents: bool = False,
+         published: bool = True) -> Dict[str, Any]:
     """Template context for one composition card.
+
+    `list_contents` adds a row per entity (`contents`); `build` sets it for
+    a crate with no constituents, whose one card is the whole composition.
+
+    `published=False` is a sub-crate whose own metadata is not beside the
+    release (`SubCrate.published`): the card is the stub's description
+    only, and nothing on disk (size, evidence graph, preview) is credited
+    to it, since the only directory to look in is the release's own.
 
     The sub-crate's own root wins; the release root's stub fills gaps; the
     release root itself supplies a DOI and publications when neither has
@@ -448,7 +511,7 @@ def card(crate: Crate, *, stub: Optional[Dict[str, Any]], main_root: Dict[str, A
     sub_dir_abs = os.path.normpath(os.path.join(crate_dir, rel_dir)) if rel_dir else crate_dir
 
     size = f.human_size(root.get("contentSize"))
-    if not size and os.path.isdir(sub_dir_abs):
+    if not size and published and os.path.isdir(sub_dir_abs):
         size = f.human_size(_dir_size(sub_dir_abs))
 
     id_label, doi, doi_href = f.identifier(root.get("identifier"), link_base)
@@ -460,8 +523,9 @@ def card(crate: Crate, *, stub: Optional[Dict[str, Any]], main_root: Dict[str, A
 
     evidence_href = ""
     # a graph this run wrote first, then one already beside the crate
-    for candidate in (os.path.join(out_dir, rel_dir, GRAPH_HTML) if rel_dir else "",
-                      os.path.join(sub_dir_abs, GRAPH_HTML)):
+    on_disk = ((os.path.join(out_dir, rel_dir, GRAPH_HTML) if rel_dir else "",
+                os.path.join(sub_dir_abs, GRAPH_HTML)) if published else ())
+    for candidate in on_disk:
         if candidate and os.path.exists(candidate):
             evidence_href = _href(candidate, crate_dir, out_dir, page_dir)
             break
@@ -469,7 +533,9 @@ def card(crate: Crate, *, stub: Optional[Dict[str, Any]], main_root: Dict[str, A
         local_graph = ref_ids(root, "localEvidenceGraph")
         if local_graph:
             target = local_graph[0]
-            if target.endswith(".html"):
+            if target.endswith(".html") and not published:
+                pass
+            elif target.endswith(".html"):
                 # Written relative to the release (CM4AI writes it that way on
                 # the stub *and* on the constituent's own root) or to the
                 # constituent: take whichever holds the file, else the
@@ -482,7 +548,7 @@ def card(crate: Crate, *, stub: Optional[Dict[str, Any]], main_root: Dict[str, A
                 evidence_href = f.ark_href(target, link_base)
 
     preview_href = ""
-    if preview:
+    if preview and published:
         preview_href = _href(os.path.join(out_dir, rel_dir, PREVIEW_HTML),
                              out_dir, out_dir, page_dir)
 
@@ -529,7 +595,12 @@ def card(crate: Crate, *, stub: Optional[Dict[str, Any]], main_root: Dict[str, A
         "statistics": summary_statistics(crate, rel_dir, crate_dir, out_dir, page_dir),
         "metadata_path": "/".join(p for p in (rel_dir, METADATA_FILENAME) if p),
         "details": det,
-        "notes": notes(crate, generated),
+        "contents": contents(crate, link_base) if list_contents else [],
+        "notes": notes(crate, generated) if published else [
+            "This sub-crate's own metadata is not published with the release "
+            "(access to its data is controlled), so only the release's "
+            "description of it is shown; its contents are not counted."],
+        "published": published,
         "search": search,
     }
 
@@ -555,15 +626,17 @@ def build(crate: Crate, *, out_dir: str, link_base: str = "",
                            rel_dir=sub.rel_dir, index=index, owner=owner,
                            crate_dir=crate_dir, out_dir=out_dir, link_base=link_base,
                            preview=previews, position=position, generated=generated,
-                           names=names, page_dir=page_dir)
-            preview_path = os.path.join(out_dir, sub.rel_dir, PREVIEW_HTML) if previews else ""
+                           names=names, page_dir=page_dir, published=sub.published)
+            preview_path = (os.path.join(out_dir, sub.rel_dir, PREVIEW_HTML)
+                            if previews and sub.published else "")
             comp.items.append(Item(context=context, crate=sub.crate,
                                    rel_dir=sub.rel_dir, preview_path=preview_path))
     else:
         context = card(crate, stub=None, main_root=crate.root, rel_dir="",
                        index=index, owner=owner, crate_dir=crate_dir, out_dir=out_dir,
                        link_base=link_base, preview=previews, position=1,
-                       generated=generated, names=names, page_dir=page_dir)
+                       generated=generated, names=names, page_dir=page_dir,
+                       list_contents=True)
         preview_path = os.path.join(out_dir, PREVIEW_HTML) if previews else ""
         comp.items.append(Item(context=context, crate=crate, rel_dir="",
                                preview_path=preview_path))

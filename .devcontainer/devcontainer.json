@@ -1,0 +1,43 @@
+{
+	"name": "Fairscape-artifacts",
+	// Or use a Dockerfile or Docker Compose file. More info: https://containers.dev/guide/dockerfile
+	"image": "mcr.microsoft.com/devcontainers/python:3",
+	"features": {},
+	"runArgs": ["--name", "fairscape-artifacts"],
+	"mounts": [
+		{
+			"source": "/mnt/e/Work/Data",
+			"target": "/mnt/data/",
+			"type": "bind"
+		}
+	],
+
+	// Features to add to the dev container. More info: https://containers.dev/features.
+	// "features": {},
+
+	// Use 'forwardPorts' to make a list of ports inside the container available locally.
+	// "forwardPorts": [],
+
+	// Use 'postCreateCommand' to run commands after the container is created.
+	// "postCreateCommand": "uname -a",
+
+	// Configure tool-specific properties.
+	"customizations": {
+		"vscode": {
+		// 1. Automatically install Pylance and Python extensions inside the container
+		"extensions": [
+			"ms-python.python",
+			"ms-python.vscode-pylance"
+		],
+		// 2. Enforce Pylance settings specifically for the container environment
+		"settings": {
+			"python.languageServer": "Pylance",
+			"python.analysis.typeCheckingMode": "basic", // Options: "off", "basic", "strict"
+			"python.analysis.autoImportCompletions": true
+		}
+		}
+	},
+
+	// Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
+	"remoteUser": "root"
+}

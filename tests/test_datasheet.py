@@ -107,6 +107,25 @@ def test_single_crate_is_its_own_card(tiny, tmp_path):
         {"inputs": [{"crate": None, "formats": ["<evil>"]}], "outputs": ["csv"], "n": 1}]
 
 
+def test_single_crate_card_lists_every_entity(tiny, tmp_path):
+    """A crate with no constituents shows its contents, not only counts."""
+    comp = composition.build(tiny, out_dir=str(tmp_path))
+    rows = comp.items[0].context["contents"]
+    expected = {n["@id"] for n in composition._entities(tiny)}
+    assert {row["id"] for row in rows} == expected
+    assert tiny.root_id not in expected
+    kinds = [row["kind"] for row in rows]
+    assert kinds[0] == "Dataset" and kinds.count("Dataset") == 3
+    html = render.datasheet_html(datasheet.build_context(tiny, composition=comp))
+    assert 'class="index contents"' in html
+    assert html.count("<tr data-search=") == len(rows)
+
+
+def test_release_cards_do_not_list_contents(release, tmp_path):
+    comp = composition.build(release, out_dir=str(tmp_path))
+    assert all(item.context["contents"] == [] for item in comp.items)
+
+
 def test_derived_inputs_skip_references_outside_the_crate(tiny, tmp_path):
     """A computation that read a scratch file not described in the crate
     must not turn that file into a declared input."""
