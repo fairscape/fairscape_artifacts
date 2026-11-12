@@ -25,12 +25,12 @@ from fairscape_artifacts import outputs as outputs_mod
 from fairscape_artifacts.crate import (Crate, METADATA_FILENAME, OUTPUT_FIELDS, SubCrate,
                                        generated_ids, generated_index, has_provenance,
                                        ref_ids, replaces, stored_generated_ids)
+from fairscape_artifacts.evidence import GRAPH_HTML
 from fairscape_artifacts.models import (Card, CellLine, ContentRow, CrateMetadata, Details,
                                         Pattern, PatternInput, Patterns, Statistics, Tally,
                                         tally)
 
 PREVIEW_HTML = "ro-crate-preview.html"
-GRAPH_HTML = "ro-crate-evidence-graph.html"
 
 #: How many distinct patterns a card lists before folding the rest.
 PATTERN_LIMIT = 12

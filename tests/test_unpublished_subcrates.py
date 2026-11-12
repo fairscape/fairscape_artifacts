@@ -10,7 +10,7 @@ showed the root crate once per stub.
 import json
 import os
 
-from fairscape_artifacts import composition, datasheet, render
+from fairscape_artifacts import composition, datasheet
 from fairscape_artifacts.crate import Crate
 
 EVI = "https://w3id.org/EVI#"
@@ -63,7 +63,7 @@ def test_unpublished_cards_borrow_nothing_from_the_release(tmp_path):
         assert item.preview_path == ""
         assert c.meta.description.endswith("description")
         assert c.notes and "not published" in c.notes[0]
-    html = render.datasheet_html(datasheet.build(crate, composition=comp))
+    html = datasheet.html(datasheet.build(crate, composition=comp))
     assert html.count("Not published with this release") == 2
     assert "Content summary" not in html
 

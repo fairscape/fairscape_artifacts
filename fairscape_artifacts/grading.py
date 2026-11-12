@@ -22,6 +22,9 @@ SCORE_LABELS = {0: "Absent", 1: "Partial", 2: "Substantive"}
 
 AWAITING = "Human review"
 
+REVIEW_JSON = "ai-ready-presentation.json"
+REVIEW_HTML = "ai-ready-review.html"
+
 
 class GraderUnavailable(RuntimeError):
     """`aireadiness_evidence` is not importable."""

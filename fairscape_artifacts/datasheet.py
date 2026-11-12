@@ -20,20 +20,38 @@ tables below, not writing HTML in Python.
 from __future__ import annotations
 
 import datetime as _dt
+import json
 import math
 import os
+import sys
 from collections import Counter
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Callable, Dict, List, Optional, Union
 
 from fairscape_artifacts import composition as composition_mod
 from fairscape_artifacts import fields as f
+from fairscape_artifacts import evidence
 from fairscape_artifacts import grading
+from fairscape_artifacts import interpretation
+from fairscape_artifacts import render
 from fairscape_artifacts.composition import Composition
 from fairscape_artifacts.crate import Crate, ref_ids
 from fairscape_artifacts.models import (NOT_SPECIFIED, Badge, CompositionSection,
                                         CrateMetadata, DatasheetPage, Link, Links, NavEntry,
                                         Regulatory, ReviewPanel, ReviewSection, Row, Segment,
                                         Stat, Summary, Swatch, links)
+
+DATASHEET_HTML = "ro-crate-datasheet.html"
+
+#: Companion pages the datasheet links to when they sit beside it:
+#: (`Links` field, file name).
+COMPANIONS = (
+    ("evidence_graph", evidence.GRAPH_HTML),
+    ("graph_json", evidence.GRAPH_JSON),
+    ("review_html", grading.REVIEW_HTML),
+    ("review_json", grading.REVIEW_JSON),
+    ("interpretation_html", interpretation.INTERPRETATION_HTML),
+    ("interpretation_json", interpretation.INTERPRETATION_JSON),
+)
 
 #: Summary tiles, in display order: (label, bucket, evi counter on the root).
 TILES = (
@@ -237,10 +255,10 @@ def linked_crate_items(crate: Crate) -> List[Link]:
         noun = "entity" if count == 1 else "entities"
         text = f"{sub.crate.name} ({sub.crate.root_id}) — {count} {noun} from this crate"
         href = ""
-        if sub.crate.dir and os.path.exists(os.path.join(sub.crate.dir, "ro-crate-datasheet.html")):
-            href = os.path.join(sub.rel_dir, "ro-crate-datasheet.html").replace(os.sep, "/") \
+        if sub.crate.dir and os.path.exists(os.path.join(sub.crate.dir, DATASHEET_HTML)):
+            href = os.path.join(sub.rel_dir, DATASHEET_HTML).replace(os.sep, "/") \
                 if not os.path.isabs(sub.rel_dir) else \
-                os.path.join(sub.crate.dir, "ro-crate-datasheet.html")
+                os.path.join(sub.crate.dir, DATASHEET_HTML)
         items.append(Link(text=text, href=href))
     return items
 
@@ -400,3 +418,57 @@ def build(crate: Crate, *, composition: Optional[Composition] = None,
         source=os.path.basename(crate.path) if crate.path else "",
         generated_at=generated_at or _dt.datetime.now().strftime("%Y-%m-%d %H:%M"),
     )
+
+
+# -- rendering and writing -----------------------------------------------------
+
+def html(page: DatasheetPage) -> str:
+    """Render the datasheet page built by `build`."""
+    return render.page_html("datasheet.html.j2", page, style_css=render.datasheet_css())
+
+
+def companion_links(out_dir: str, page_dir: Optional[str] = None) -> Links:
+    """Companion pages in `out_dir` the datasheet may link to, if they
+    exist, relative to where the datasheet is written (`page_dir`)."""
+    page_dir = page_dir or out_dir
+    hrefs = {}
+    for key, name in COMPANIONS:
+        path = os.path.join(out_dir, name)
+        hrefs[key] = (os.path.relpath(path, page_dir).replace(os.sep, "/")
+                      if os.path.exists(path) else "")
+    return Links(**hrefs)
+
+
+def load_review(crate_dir: str, out_dir: str, *, rerun: bool = False,
+                network: bool = False,
+                progress: Optional[Callable[[str], None]] = None,
+                ) -> Optional[Dict[str, Any]]:
+    """The review to show on a datasheet: a fresh one, or one already on disk.
+
+    Running the grader walks the whole crate, so an existing presentation in
+    `out_dir` is reused unless `rerun` says otherwise. Without the grader the
+    datasheet simply omits the AI-Ready section.
+    """
+    existing = os.path.join(out_dir, grading.REVIEW_JSON)
+    if not rerun and os.path.exists(existing):
+        with open(existing, encoding="utf-8") as handle:
+            return json.load(handle)
+    try:
+        return grading.review(crate_dir, network=network, progress=progress)
+    except grading.GraderUnavailable as err:
+        print(f"warning: {err}; datasheet will omit the AI-Ready section",
+              file=sys.stderr)
+        return None
+
+
+def write(crate: Crate, composition: Composition, review: Optional[Dict[str, Any]], *,
+          out_dir: str, link_base: str = "", target: Optional[str] = None,
+          generated_at: Optional[str] = None) -> str:
+    """Build and render the datasheet to `target` (default: `DATASHEET_HTML`
+    in `out_dir`, beside the other outputs), linking the companion pages
+    found there. Returns the path written."""
+    target = target or os.path.join(out_dir, DATASHEET_HTML)
+    page = build(crate, composition=composition, review=review, generated_at=generated_at,
+                 links=companion_links(out_dir, os.path.dirname(target)),
+                 link_base=link_base)
+    return render.write(target, html(page))

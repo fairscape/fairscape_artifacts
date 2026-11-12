@@ -37,16 +37,15 @@ from fairscape_artifacts import inverses as inverses_mod
 from fairscape_artifacts import preview as preview_mod
 from fairscape_artifacts import render
 from fairscape_artifacts.crate import METADATA_FILENAME, Crate, ref_ids
-from fairscape_artifacts.models import Links
 
-DATASHEET_HTML = "ro-crate-datasheet.html"
+DATASHEET_HTML = datasheet_mod.DATASHEET_HTML
 PREVIEW_HTML = composition_mod.PREVIEW_HTML
-GRAPH_HTML = "ro-crate-evidence-graph.html"
-GRAPH_JSON = "ro-crate-evidence-graph.json"
-GRAPH_DOMAIN_HTML = "ro-crate-evidence-graph-domain.html"
-GRAPH_DOMAIN_JSON = "ro-crate-evidence-graph-domain.json"
-REVIEW_JSON = "ai-ready-presentation.json"
-REVIEW_HTML = "ai-ready-review.html"
+GRAPH_HTML = evidence_mod.GRAPH_HTML
+GRAPH_JSON = evidence_mod.GRAPH_JSON
+GRAPH_DOMAIN_HTML = evidence_mod.GRAPH_DOMAIN_HTML
+GRAPH_DOMAIN_JSON = evidence_mod.GRAPH_DOMAIN_JSON
+REVIEW_JSON = grading.REVIEW_JSON
+REVIEW_HTML = grading.REVIEW_HTML
 INTERPRETATION_JSON = interpretation_mod.INTERPRETATION_JSON
 INTERPRETATION_HTML = interpretation_mod.INTERPRETATION_HTML
 
@@ -80,37 +79,6 @@ def _progress(quiet: bool):
     return lambda message: print(message, file=sys.stderr)
 
 
-def _load_review(crate_dir: str, out_dir: str, args) -> Optional[Dict[str, Any]]:
-    """The review to show on a datasheet: a fresh one, or one already on disk.
-
-    Running the grader walks the whole crate, so an existing presentation is
-    reused unless `--rerun-review` says otherwise.
-    """
-    existing = os.path.join(out_dir, REVIEW_JSON)
-    if not args.rerun_review and os.path.exists(existing):
-        with open(existing, encoding="utf-8") as handle:
-            return json.load(handle)
-    try:
-        return grading.review(crate_dir, network=args.network,
-                              progress=_progress(args.quiet))
-    except grading.GraderUnavailable as err:
-        print(f"warning: {err}; datasheet will omit the AI-Ready section",
-              file=sys.stderr)
-        return None
-
-
-def _links(out_dir: str, page_dir: Optional[str] = None) -> Links:
-    """Companion pages in `out_dir` the datasheet may link to, if they
-    exist, relative to where the datasheet is written (`page_dir`)."""
-    page_dir = page_dir or out_dir
-    return Links(**{key: _rel(os.path.join(out_dir, name), page_dir)
-                    if os.path.exists(os.path.join(out_dir, name)) else ""
-                    for key, name in (("evidence_graph", GRAPH_HTML), ("graph_json", GRAPH_JSON),
-                                      ("review_html", REVIEW_HTML), ("review_json", REVIEW_JSON),
-                                      ("interpretation_html", INTERPRETATION_HTML),
-                                      ("interpretation_json", INTERPRETATION_JSON))})
-
-
 def _hint_unresolved(crate, graph: Dict[str, Any]) -> None:
     """Say why a constituent built on its own has dangling ids, and what to
     do about it, rather than leaving a reader with "not found" nodes."""
@@ -128,16 +96,6 @@ def _hint_unresolved(crate, graph: Dict[str, Any]) -> None:
 
 def _rel(target: str, start_dir: str) -> str:
     return os.path.relpath(target, start_dir).replace(os.sep, "/")
-
-
-def _write_datasheet(crate, comp, review, *, out_dir: str, link_base: str,
-                     target: Optional[str] = None) -> str:
-    """Render the datasheet to `target` (default: beside the other outputs)."""
-    target = target or os.path.join(out_dir, DATASHEET_HTML)
-    page = datasheet_mod.build(crate, composition=comp, review=review, generated_at=_stamp(),
-                               links=_links(out_dir, os.path.dirname(target)),
-                               link_base=link_base)
-    return render.write(target, render.datasheet_html(page))
 
 
 def _write_previews(comp, out_dir: str, path: str, link_base: str,
@@ -166,14 +124,16 @@ def cmd_datasheet(args) -> List[str]:
     path = _resolve(args.crate)
     crate = Crate.load(path)
     out_dir = _out_dir(path, args.output_dir)
-    review = None if args.no_review else _load_review(
-        os.path.dirname(os.path.abspath(path)), out_dir, args)
+    review = None if args.no_review else datasheet_mod.load_review(
+        os.path.dirname(os.path.abspath(path)), out_dir, rerun=args.rerun_review,
+        network=args.network, progress=_progress(args.quiet))
     target = os.path.abspath(args.output or os.path.join(out_dir, DATASHEET_HTML))
     page_dir = os.path.dirname(target)
     comp = composition_mod.build(crate, out_dir=out_dir, link_base=args.link_base,
                                  previews=not args.no_previews, page_dir=page_dir)
-    written = [_write_datasheet(crate, comp, review, out_dir=out_dir,
-                                link_base=args.link_base, target=target)]
+    written = [datasheet_mod.write(crate, comp, review, out_dir=out_dir,
+                                   link_base=args.link_base, target=target,
+                                   generated_at=_stamp())]
     written += _write_previews(comp, out_dir, path, args.link_base, datasheet_path=target)
     return written
 
@@ -359,8 +319,8 @@ def cmd_all(args) -> List[str]:
 
     comp = composition_mod.build(crate, out_dir=out_dir, link_base=args.link_base,
                                  previews=not args.no_previews)
-    datasheet_path = _write_datasheet(crate, comp, None, out_dir=out_dir,
-                                      link_base=args.link_base)
+    datasheet_path = datasheet_mod.write(crate, comp, None, out_dir=out_dir,
+                                         link_base=args.link_base, generated_at=_stamp())
     written += _write_previews(comp, out_dir, path, args.link_base, datasheet_path)
 
     presentation = None
@@ -376,7 +336,8 @@ def cmd_all(args) -> List[str]:
             print(f"warning: {err}; skipping the AI-Ready review", file=sys.stderr)
 
     if presentation:
-        _write_datasheet(crate, comp, presentation, out_dir=out_dir, link_base=args.link_base)
+        datasheet_mod.write(crate, comp, presentation, out_dir=out_dir,
+                            link_base=args.link_base, generated_at=_stamp())
     written.append(datasheet_path)
     return written
 

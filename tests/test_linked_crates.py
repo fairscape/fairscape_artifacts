@@ -15,7 +15,7 @@ import os
 
 import pytest
 
-from fairscape_artifacts import composition, datasheet, evidence, render
+from fairscape_artifacts import composition, datasheet, evidence
 from fairscape_artifacts.crate import Crate
 from fairscape_artifacts.models import Stat
 
@@ -254,7 +254,7 @@ def test_datasheet_lists_linked_crates(pair, tmp_path):
     assert linked.entries[0].text.startswith("Upstream run (ark:59853/rocrate-upstream-1111111)")
     assert "2 entities" in linked.entries[0].text
     assert Stat(label="linked crates", n="1") in page.summary.extra
-    html = render.datasheet_html(page)
+    html = datasheet.html(page)
     assert "Linked Crates" in html and "Upstream run" in html
 
 

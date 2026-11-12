@@ -117,7 +117,7 @@ def test_single_crate_card_lists_every_entity(tiny, tmp_path):
     assert tiny.root_id not in expected
     kinds = [row.kind for row in rows]
     assert kinds[0] == "Dataset" and kinds.count("Dataset") == 3
-    html = render.datasheet_html(datasheet.build(tiny, composition=comp))
+    html = datasheet.html(datasheet.build(tiny, composition=comp))
     assert 'class="index contents"' in html
     assert html.count("<tr data-search=") == len(rows)
 
@@ -139,7 +139,7 @@ def test_derived_inputs_skip_references_outside_the_crate(tiny, tmp_path):
 
 def test_pattern_text_is_escaped_in_the_page(tiny, tmp_path):
     comp = composition.build(tiny, out_dir=str(tmp_path))
-    html = render.datasheet_html(datasheet.build(tiny, composition=comp))
+    html = datasheet.html(datasheet.build(tiny, composition=comp))
     assert "<evil>" not in html
     assert "&lt;evil&gt;" in html
     assert "Some IRB" in html and "irb@example.org" in html
@@ -187,7 +187,7 @@ def test_release_summary_trusts_root_counters(release, tmp_path):
     assert Stat(label="sub-crates", n="9") in page.summary.extra
     assert page.summary.truncated
     assert page.composition.show_index
-    html = render.datasheet_html(page)
+    html = datasheet.html(page)
     assert 'id="dataset-filter"' in html
     assert html.count('class="idx-row"') == 9
     assert html.count('<details class="card"') == 9
@@ -262,7 +262,7 @@ def test_review_panel_geometry_draws_points():
 
 
 def test_datasheet_page_has_every_section(tiny, tmp_path):
-    html = render.datasheet_html(datasheet.build(
+    html = datasheet.html(datasheet.build(
         tiny, links={"evidence_graph": "ro-crate-evidence-graph.html"}))
     for section in ("datasheet-summary", "dataset-details", "ai-readiness", "composition",
                     "distribution", "sidebar", "subcrate-1"):

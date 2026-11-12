@@ -20,7 +20,7 @@ from typing import Any, Dict, Optional
 from jinja2 import Environment, FileSystemLoader, StrictUndefined, select_autoescape
 from markupsafe import Markup
 
-from fairscape_artifacts.models import DatasheetPage, Model, PreviewPage
+from fairscape_artifacts.models import Model, PreviewPage
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 TEMPLATE_DIR = os.path.join(HERE, "templates")
@@ -73,20 +73,20 @@ def _context(page: Model) -> Dict[str, Any]:
     return {name: getattr(page, name) for name in names}
 
 
-def datasheet_html(page: DatasheetPage) -> str:
-    """Render the datasheet page (see `datasheet.build`)."""
-    return _render("datasheet.html.j2", {
-        **_context(page),
-        "style_css": Markup(asset("style.css") + "\n" + asset("datasheet.css")),
-    })
+def page_html(template_name: str, page: Model, **extra: Any) -> str:
+    """Render a page model with `template_name`; `extra` adds template
+    variables the model does not carry (inlined CSS, say)."""
+    return _render(template_name, {**_context(page), **extra})
+
+
+def datasheet_css() -> Markup:
+    """The stylesheet shared by the datasheet and preview pages."""
+    return Markup(asset("style.css") + "\n" + asset("datasheet.css"))
 
 
 def preview_html(page: PreviewPage) -> str:
     """Render a crate's preview page (see `preview.build`)."""
-    return _render("preview.html.j2", {
-        **_context(page),
-        "style_css": Markup(asset("style.css") + "\n" + asset("datasheet.css")),
-    })
+    return page_html("preview.html.j2", page, style_css=datasheet_css())
 
 
 def _other_crates(graph: Dict[str, Any]) -> list:
@@ -134,8 +134,7 @@ def interpretation_html(context: Dict[str, Any]) -> str:
     """Render the interpretation page from an `interpretation.summarize` dict."""
     return _render("interpretation.html.j2", {
         **context,
-        "style_css": Markup(asset("style.css") + "\n" + asset("datasheet.css")
-                            + "\n" + asset("interpretation.css")),
+        "style_css": Markup(datasheet_css() + "\n" + asset("interpretation.css")),
         "viewer_css": Markup(asset("annotated_viewer.css")),
         "viewer_js": Markup(asset("annotated_viewer.js")),
         "graph_json": Markup(json_for_script(context.get("graph") or {})),

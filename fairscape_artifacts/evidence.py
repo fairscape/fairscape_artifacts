@@ -56,6 +56,11 @@ from fairscape_artifacts.crate import (
     used_dataset_ids,
 )
 
+GRAPH_HTML = "ro-crate-evidence-graph.html"
+GRAPH_JSON = "ro-crate-evidence-graph.json"
+GRAPH_DOMAIN_HTML = "ro-crate-evidence-graph-domain.html"
+GRAPH_DOMAIN_JSON = "ro-crate-evidence-graph-domain.json"
+
 Node = Dict[str, Any]
 
 #: Entities — things provenance flows *into*.
