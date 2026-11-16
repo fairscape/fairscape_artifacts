@@ -11,7 +11,6 @@ import pytest
 
 from fairscape_artifacts import composition, datasheet, evidence, fields, outputs, preview
 from fairscape_artifacts.crate import Crate
-from fairscape_artifacts.models import CrateMetadata
 
 EVI = "https://w3id.org/EVI#"
 DS = EVI + "Dataset"
@@ -240,7 +239,7 @@ def test_C1_license_badge_and_rows_are_linked():
          "license": {"@id": "https://spdx.org/licenses/MIT", "name": "MIT"},
          "publisher": {"@id": "https://example.org/pub", "name": "Pub"}},
     ]})
-    meta = CrateMetadata.read(crate.root, crate.index)
+    meta = fields.crate_metadata(crate.root, crate.index)
     badge = [b for b in datasheet.badges(meta) if b.label == "License"][0]
     assert badge.href == "https://spdx.org/licenses/MIT" and badge.title == "MIT"
     rows = {r.label: r for r in preview.build(crate, crate.index, {}).rows}
@@ -484,7 +483,7 @@ def test_C3_identifier_label_matches_its_kind(identifier, label, href):
     rows = {r.label: r for r in preview.build(crate, crate.index, {}, link_base=base).rows}
     assert label in rows and rows[label].href == href
     assert "DOI" not in rows or label == "DOI"
-    meta = CrateMetadata.read(crate.root, crate.index, base)
+    meta = fields.crate_metadata(crate.root, crate.index, base)
     badge_labels = [b.label for b in datasheet.badges(meta)]
     assert label in badge_labels
 

@@ -9,9 +9,11 @@ text or a number: the templates hold every angle bracket, so crate-authored
 text is always autoescaped.
 
 `CrateMetadata` is the shared part. A crate root's descriptive fields are
-read once, here, and the hero badges, the overview and distribution tables,
-each composition card and every preview page draw on the same object
-instead of each reading the root its own way.
+read once, by `fields.crate_metadata`, and the hero badges, the overview and
+distribution tables, each composition card and every preview page draw on
+the same object instead of each reading the root its own way.
+
+This module is data only: it reads nothing from a crate itself.
 """
 
 from __future__ import annotations
@@ -20,8 +22,6 @@ from collections import Counter
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict, computed_field
-
-from fairscape_artifacts import fields as f
 
 NOT_SPECIFIED = "Not specified"
 
@@ -51,12 +51,12 @@ class Row(Model):
     entries: List[Link] = []
 
     @classmethod
-    def of(cls, label: str, value: Any = "", *, id: str = "", href: str = "",
+    def of(cls, label: str, value: str = "", *, id: str = "", href: str = "",
            kind: str = "text", items: Optional[List[Link]] = None,
            missing: str = "") -> Optional["Row"]:
         """A row, or None when there is nothing to show (and no `missing`
         placeholder to show instead)."""
-        value = f.text(value) if not isinstance(value, str) else value.strip()
+        value = (value or "").strip()
         if kind == "list":
             entries = [i for i in (items or []) if i.text]
             if entries:
@@ -66,12 +66,6 @@ class Row(Model):
         if missing:
             return cls(label=label, id=id, kind="missing", value=missing)
         return None
-
-
-def links(values: List[str]) -> List[Link]:
-    """List entries, linked when they look like URLs or DOIs."""
-    return [Link(text=v, href=f.link_href(v) if v.startswith(("http", "doi:", "10.")) else "")
-            for v in values]
 
 
 class Badge(Model):
@@ -103,7 +97,8 @@ class CrateMetadata(Model):
     Everything is display text: references are followed into the graph
     (`publisher: {"@id": "#org"}` becomes the organization's name and URL),
     lists are lists of strings, and every linkable value carries its href
-    beside it. `read` is the only place these fields are read from a root.
+    beside it. `fields.crate_metadata` is the only place these fields are
+    read from a root.
     """
     id: str = ""
     id_href: str = ""
@@ -140,61 +135,8 @@ class CrateMetadata(Model):
     completeness: str = ""
     based_on: List[str] = []
     conforms_to: List[str] = []
-
-    @classmethod
-    def read(cls, root: Dict[str, Any], index: Dict[str, Dict[str, Any]],
-             link_base: str = "") -> "CrateMetadata":
-        root_id = root.get("@id", "")
-        id_label, id_text, id_href = f.identifier(root.get("identifier"), link_base)
-        publisher = f.resolved(root.get("publisher"), index)
-        return cls(
-            id=root_id,
-            id_href=f.ark_href(root_id, link_base),
-            name=f.first(root, "name") or root_id,
-            description=f.first(root, "description"),
-            version=f.first(root, "version"),
-            date_published=f.first(root, "datePublished"),
-            date_created=f.first(root, "dateCreated"),
-            date_modified=f.first(root, "dateModified"),
-            size=(f.human_size(root.get("contentSize"))
-                  or f.human_size(root.get("evi:totalContentSizeBytes"))),
-            authors=f.authors(root, index),
-            publisher=f.text(publisher),
-            publisher_href=f.http_url(publisher),
-            principal_investigator=f.first(root, "principalInvestigator"),
-            contact=f.first(root, "contactEmail"),
-            contact_href=f.link_href(root.get("contactEmail")),
-            identifier_label=id_label,
-            identifier=id_text,
-            identifier_href=id_href,
-            license=f.first(root, "license"),
-            license_href=f.http_url(root.get("license")),
-            terms_of_use=f.first(root, "conditionsOfAccess"),
-            terms_href=f.http_url(root.get("conditionsOfAccess")),
-            confidentiality=f.first(root, "confidentialityLevel"),
-            keywords=f.keywords(root),
-            citation=f.publications(root.get("citation")),
-            publications=f.publications(root.get("associatedPublication")),
-            funder=f.joined(root.get("funder")),
-            copyright=f.first(root, "copyrightNotice"),
-            md5=f.first(root, "MD5", "md5"),
-            access_href=(f.http_url(root.get("contentUrl")) or f.http_url(root.get("url"))
-                         or f.http_url(root.get("sameAs"))),
-            data_governance=(f.first(root, "dataGovernanceCommittee")
-                             or f.additional_property(root, "Data Governance Committee")),
-            ethical_review=f.first(root, "ethicalReview"),
-            completeness=(f.first(root, "completeness")
-                          or f.additional_property(root, "Completeness")),
-            based_on=f.as_list(root.get("isBasedOn")),
-            conforms_to=f.as_list(root.get("conformsTo")),
-        )
-
-    @computed_field
-
-    @property
-    def date(self) -> str:
-        """The one date a card shows, to the day."""
-        return f.date_only(self.date_published or self.date_created or self.date_modified)
+    #: The one date a card shows, to the day.
+    date: str = ""
 
 
 # -- composition cards -------------------------------------------------------

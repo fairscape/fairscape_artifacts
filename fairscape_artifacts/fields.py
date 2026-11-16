@@ -12,6 +12,7 @@ import re
 from typing import Any, Dict, List, Optional, Tuple
 
 from fairscape_artifacts.crate import PROV_TYPE_FALLBACK, evi_short_types, short_types
+from fairscape_artifacts.models import CrateMetadata, Link
 
 # -- scalars -----------------------------------------------------------------
 
@@ -378,3 +379,64 @@ def bucket(node: Dict[str, Any]) -> str:
         if read_as:
             return _BUCKET_OF[read_as]
     return "other"
+
+
+# -- page models -------------------------------------------------------------
+
+def links(values: List[str]) -> List[Link]:
+    """List entries, linked when they look like URLs or DOIs."""
+    return [Link(text=v, href=link_href(v) if v.startswith(("http", "doi:", "10.")) else "")
+            for v in values]
+
+
+def crate_metadata(root: Dict[str, Any], index: Dict[str, Dict[str, Any]],
+                   link_base: str = "") -> CrateMetadata:
+    """A crate root's descriptive fields, flattened into a `CrateMetadata`."""
+    root_id = root.get("@id", "")
+    id_label, id_text, id_href = identifier(root.get("identifier"), link_base)
+    publisher = resolved(root.get("publisher"), index)
+    date_published = first(root, "datePublished")
+    date_created = first(root, "dateCreated")
+    date_modified = first(root, "dateModified")
+    return CrateMetadata(
+        id=root_id,
+        id_href=ark_href(root_id, link_base),
+        name=first(root, "name") or root_id,
+        description=first(root, "description"),
+        version=first(root, "version"),
+        date_published=date_published,
+        date_created=date_created,
+        date_modified=date_modified,
+        date=date_only(date_published or date_created or date_modified),
+        size=(human_size(root.get("contentSize"))
+              or human_size(root.get("evi:totalContentSizeBytes"))),
+        authors=authors(root, index),
+        publisher=text(publisher),
+        publisher_href=http_url(publisher),
+        principal_investigator=first(root, "principalInvestigator"),
+        contact=first(root, "contactEmail"),
+        contact_href=link_href(root.get("contactEmail")),
+        identifier_label=id_label,
+        identifier=id_text,
+        identifier_href=id_href,
+        license=first(root, "license"),
+        license_href=http_url(root.get("license")),
+        terms_of_use=first(root, "conditionsOfAccess"),
+        terms_href=http_url(root.get("conditionsOfAccess")),
+        confidentiality=first(root, "confidentialityLevel"),
+        keywords=keywords(root),
+        citation=publications(root.get("citation")),
+        publications=publications(root.get("associatedPublication")),
+        funder=joined(root.get("funder")),
+        copyright=first(root, "copyrightNotice"),
+        md5=first(root, "MD5", "md5"),
+        access_href=(http_url(root.get("contentUrl")) or http_url(root.get("url"))
+                     or http_url(root.get("sameAs"))),
+        data_governance=(first(root, "dataGovernanceCommittee")
+                         or additional_property(root, "Data Governance Committee")),
+        ethical_review=first(root, "ethicalReview"),
+        completeness=(first(root, "completeness")
+                      or additional_property(root, "Completeness")),
+        based_on=as_list(root.get("isBasedOn")),
+        conforms_to=as_list(root.get("conformsTo")),
+    )

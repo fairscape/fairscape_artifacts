@@ -14,7 +14,7 @@ from typing import Dict, List, Optional
 from fairscape_artifacts import fields as f
 from fairscape_artifacts.composition import summary_statistics
 from fairscape_artifacts.crate import Crate, generated_ids, generated_index, ref_ids
-from fairscape_artifacts.models import (ComputationDetails, CrateMetadata, Entry, Link,
+from fairscape_artifacts.models import (ComputationDetails, Entry, Link,
                                         PreviewPage, RefRow, Row, SchemaProperty, Tab)
 
 DESCRIPTION_LIMIT = 100
@@ -134,7 +134,7 @@ def build(crate: Crate, index, owner, *, link_base: str = "",
     tabs = [Tab(key=key, label=label, entries=buckets[kind])
             for kind, key, label in TABS if buckets[kind]]
 
-    meta = CrateMetadata.read(crate.root, index, link_base)
+    meta = f.crate_metadata(crate.root, index, link_base)
     stats = summary_statistics(crate, crate.dir or "", crate.dir or "")
     rows = [
         Row.of("RO-Crate ID", meta.id, href=meta.id_href, kind="mono"),

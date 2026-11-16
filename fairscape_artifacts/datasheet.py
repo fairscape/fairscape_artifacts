@@ -38,7 +38,7 @@ from fairscape_artifacts.crate import Crate, ref_ids
 from fairscape_artifacts.models import (NOT_SPECIFIED, Badge, CompositionSection,
                                         CrateMetadata, DatasheetPage, Link, Links, NavEntry,
                                         Regulatory, ReviewPanel, ReviewSection, Row, Segment,
-                                        Stat, Summary, Swatch, links)
+                                        Stat, Summary, Swatch)
 
 DATASHEET_HTML = "ro-crate-datasheet.html"
 
@@ -292,15 +292,15 @@ def overview(crate: Crate, meta: CrateMetadata) -> List[Row]:
         Row.of("Keywords", ", ".join(meta.keywords), id="keywords"),
         Row.of("Cite As", citation[0] if len(citation) == 1 else "", id="citation")
         if len(citation) <= 1 else
-        Row.of("Cite As", id="citation", kind="list", items=links(citation)),
+        Row.of("Cite As", id="citation", kind="list", items=f.links(citation)),
         Row.of("Funding", meta.funder, id="funding"),
         Row.of("Completeness", meta.completeness, id="completeness"),
         Row.of("Related Publications", id="related-publications", kind="list",
-               items=links(meta.publications)),
-        Row.of("Based On", id="based-on", kind="list", items=links(meta.based_on)),
+               items=f.links(meta.publications)),
+        Row.of("Based On", id="based-on", kind="list", items=f.links(meta.based_on)),
         Row.of("Linked Crates", id="linked-crates", kind="list",
                items=linked_crate_items(crate)),
-        Row.of("Conforms To", id="conforms-to", kind="list", items=links(meta.conforms_to)),
+        Row.of("Conforms To", id="conforms-to", kind="list", items=f.links(meta.conforms_to)),
     ]
     return [r for r in rows if r]
 
@@ -393,7 +393,7 @@ def build(crate: Crate, *, composition: Optional[Composition] = None,
     if composition is None:
         composition = composition_mod.build(
             crate, out_dir=crate.dir or os.getcwd(), link_base=link_base, previews=False)
-    meta = CrateMetadata.read(crate.root, composition.index, link_base)
+    meta = f.crate_metadata(crate.root, composition.index, link_base)
     review_summary = review_panel(grading.summarize(review))
     use_case_rows = use_cases(crate)
 

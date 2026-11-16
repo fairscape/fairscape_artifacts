@@ -451,7 +451,7 @@ def card(crate: Crate, *, stub: Optional[dict], main: CrateMetadata, rel_dir: st
         for key, value in source.items():
             if value not in (None, "", [], {}):
                 root[key] = value
-    meta = CrateMetadata.read(root, index, link_base)
+    meta = f.crate_metadata(root, index, link_base)
     if stub:
         inherited = {}
         if not meta.identifier:
@@ -513,7 +513,7 @@ def build(crate: Crate, *, out_dir: str, link_base: str = "",
     subcrates = crate.sub_crates()
     index, owner, names = build_index(crate, subcrates)
     generated = generated_index(index)
-    main = CrateMetadata.read(crate.root, index, link_base)
+    main = f.crate_metadata(crate.root, index, link_base)
     comp = Composition(index=index, owner=owner, names=names, is_release=bool(subcrates))
     shared = dict(main=main, index=index, owner=owner, crate_dir=crate_dir, out_dir=out_dir,
                   link_base=link_base, preview=previews, generated=generated, names=names,
